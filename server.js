@@ -1,11 +1,13 @@
 const express = require('express');
 const sequelize = require('./config/db');
 const cardRoutes = require('./routes/cardRoutes');
+const cors = require('cors');
 
 require('dotenv').config();
 
 const app = express();
 app.use(express.json()); // Middleware to parse JSON
+app.use(cors()); // This will allow all origins
 
 // Routes
 app.use('/api', cardRoutes);

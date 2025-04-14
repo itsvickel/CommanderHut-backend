@@ -37,15 +37,16 @@ async function populateDatabase() {
         mana_cost: card.mana_cost || null,
         type_line: card.type_line || null,
         oracle_text: card.oracle_text || null,
-        colors: JSON.stringify(card.colors || []),
+        colors: JSON.stringify(card.colors || []),  
         set: card.set || null,
         set_name: card.set_name || null,
         collector_number: card.collector_number || "0",
         artist: card.artist || "Unknown Artist",
         released_at: card.released_at || null,
-        image_uris: card.image_uris ? JSON.stringify(card.image_uris) : null,
+        image_uris: card.image_uris || null,  
         legalities: card.legalities || null
       });
+      
 
       // When batch size is reached, insert the batch and clear it
       if (batch.length >= batchSize) {
