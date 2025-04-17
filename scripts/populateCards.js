@@ -44,7 +44,8 @@ async function populateDatabase() {
         artist: card.artist || "Unknown Artist",
         released_at: card.released_at || null,
         image_uris: card.image_uris || null,  
-        legalities: card.legalities || null
+        legalities: card.legalities || null,
+        layout: card.layout || null,
       });
       
 

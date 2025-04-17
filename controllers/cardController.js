@@ -109,9 +109,18 @@ const getRandomListOfCards =  async (req, res) => {
 
   try {
     const cards = await Card.findAll({
+      where: {
+        type_line: {
+          [Op.notLike]: '%Land%'
+        },
+        layout: {
+          [Op.notIn]: ['token', 'double_faced_token']
+        }
+      },
       order: sequelize.random(),
       limit: limit
     });
+
     
     if (!cards || cards.length === 0) {
       return res.status(404).json({ error: 'list of Cards not found' });

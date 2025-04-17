@@ -13,7 +13,8 @@ const Card = sequelize.define('Card', {
   artist: DataTypes.STRING,
   released_at: DataTypes.DATEONLY,
   image_uris: DataTypes.JSON,   
-  legalities: DataTypes.JSON
+  legalities: DataTypes.JSON,
+  layout: DataTypes.STRING  
 }, {
   indexes: [
     {
