@@ -4,11 +4,12 @@ const { getAllCards,getCardsBySet, getCardBySetAndCollectorNumber, getCardByName
 const router = express.Router();
 
 // Most specific routes first
-router.get('/cards/name/:name', getCardByName);
-router.get('/cards/randomList', getRandomListOfCards);
-router.get('/cards/:set/:collectorNumber', getCardBySetAndCollectorNumber);
-router.get('/cards/:set', getCardsBySet);
-router.get('/cards', getAllCards);
+router.get('/cards/name/:name', getCardByName); // 🔍 exact match
+router.get('/cards/randomList', getRandomListOfCards); // 🎲
+router.get('/cards/set/:set', getCardsBySet); // ✅ changed from /cards/:set
+router.get('/cards/:set/:collectorNumber', getCardBySetAndCollectorNumber); // 🆗 stays same
+router.get('/cards', getAllCards); // 🧾 all
 router.post('/cards', addCard);
+
 
 module.exports = router;

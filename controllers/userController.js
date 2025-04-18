@@ -1,6 +1,9 @@
 const bcrypt = require('bcrypt');
 const User = require('../models/User'); 
- 
+const jwt = require('jsonwebtoken');  // Import the jsonwebtoken library
+
+const JWT_SECRET = process.env.JWT_TOKEN; // Replace with a strong secret key for JWT
+
 async function addUser(req, res) {
     console.log(req.body);
     try {
@@ -35,31 +38,48 @@ async function addUser(req, res) {
 }
 
 async function loginUser(req, res) {
-    try {
-      const { email_address, password } = req.body;
-  
-      // Find the user by email address
-      const user = await User.findOne({ where: { email_address } });
-  
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-  
-      // Check if the password is correct using bcrypt
-      const isValidPassword = await bcrypt.compare(password, user.password);
-  
-      if (!isValidPassword) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-  
-      // Send back the user and a success message (no token for now)
-      return res.status(200).json({ message: 'Login successful', user });
-  
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ error: 'Failed to login' });
+  try {
+    const { email_address, password } = req.body;
+
+    // Find the user by email address
+    const user = await User.findOne({ where: { email_address } });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
+
+    // Check if the password is correct using bcrypt
+    const isValidPassword = await bcrypt.compare(password, user.password);
+
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Create a JWT token (set TTL to 1 hour)
+    const token = jwt.sign(
+      { id: user.id, email_address: user.email_address, username: user.username }, // Payload
+      JWT_SECRET, // Secret key to sign the token
+      { expiresIn: '1h' } // Token expiration time (TTL)
+    );
+
+    // Send the token and user data back
+    return res.status(200).json({
+      message: 'Login successful',
+      user: {
+        id: user.id,
+        username: user.username,
+        email_address: user.email_address,
+      },
+      token, // Send the token to the frontend
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Failed to login' });
   }
+}
+
+
 async function findUser(req, res) {
   try {
     const { id } = req.params;  // Extract the user ID from the URL parameter
