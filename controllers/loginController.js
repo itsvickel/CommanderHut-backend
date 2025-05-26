@@ -1,7 +1,7 @@
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
-const { User } = require('../models');
- 
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import  User  from '../models/User.js';
+
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // The login function
@@ -65,4 +65,5 @@ function logoutUser(req, res) {
 
   return res.status(200).json({ message: 'Logged out successfully' });
 }
-module.exports = { loginUser, logoutUser };
+
+export { loginUser, logoutUser };

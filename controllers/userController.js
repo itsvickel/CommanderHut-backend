@@ -1,6 +1,6 @@
-const bcrypt = require('bcrypt');
-const User = require('../models/User'); 
-const jwt = require('jsonwebtoken');  // Import the jsonwebtoken library
+import bcrypt from 'bcrypt';
+import User from '../models/User.js'; 
+import jwt from 'jsonwebtoken';  // Import the jsonwebtoken library
  
 async function addUser(req, res) {
     console.log(req.body);
@@ -51,4 +51,4 @@ async function findUser(req, res) {
   }
 }
 
-module.exports = { addUser, findUser }; 
+export { addUser, findUser };

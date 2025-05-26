@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+import jwt from 'jsonwebtoken';
 
 const checkAuth = (req, res) => {
   const token = req.cookies.token; // Access the HttpOnly cookie
@@ -7,7 +7,7 @@ const checkAuth = (req, res) => {
     return res.status(401).json({ isAuthenticated: false });
   }
 
-  try {
+  try { 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     return res.status(200).json({
       isAuthenticated: true,
@@ -22,4 +22,4 @@ const checkAuth = (req, res) => {
   }
 };
 
-module.exports = { checkAuth };
+export default checkAuth;

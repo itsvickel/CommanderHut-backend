@@ -1,27 +1,35 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
-const Deck = require('./Deck');
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
 
 const User = sequelize.define('User', {
   id: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING,
     primaryKey: true,
-    autoIncrement: true
   },
-  username: DataTypes.STRING,
-  password: DataTypes.STRING,
+  username: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
   email_address: {
     type: DataTypes.STRING,
     allowNull: false,
-    unique: true
+    unique: true, // OK now that we dropped the table
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  created_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+  updated_at: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
   }
 }, {
-  timestamps: true,
-  createdAt: 'created_at',
-  updatedAt: 'updated_at'
+  tableName: 'users',
+  timestamps: false, // you're manually handling created_at/updated_at
 });
 
-User.hasMany(Deck, { foreignKey: 'user_id' });
-Deck.belongsTo(User, { foreignKey: 'user_id' });
-
-module.exports = User;
+export default User;

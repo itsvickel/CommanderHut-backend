@@ -1,10 +1,16 @@
-const express = require('express');
-const { createDeckWithCards, getDecksByUser, getDecks} = require('../controllers/deckController');
+import express from 'express';
+import {
+  createDeckWithCards,
+  getDecksByUser,
+  getDecks,
+  getDeckByID
+} from '../controllers/deckController.js';
 
 const router = express.Router();
 
 router.post('/decks', createDeckWithCards);
-router.get('/decks/:user_id', getDecksByUser);
+router.get('/decks/id/:id', getDeckByID);
+router.get('/decks/user/:user_id', getDecksByUser);
 router.get('/decks', getDecks);
 
-module.exports = router;
+export default router;

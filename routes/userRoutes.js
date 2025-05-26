@@ -1,5 +1,5 @@
-const express = require('express');
-const { addUser, findUser } = require('../controllers/userController');
+import express from 'express';
+import { addUser, findUser } from '../controllers/userController.js';
 
 const router = express.Router();
 
@@ -7,4 +7,4 @@ const router = express.Router();
 router.post('/user', addUser);
 router.post('/user/:id', findUser);
 
-module.exports = router;
+export default router;

@@ -1,27 +1,61 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
+import { Model, DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
 
-const Card = sequelize.define('Card', {
-  name: DataTypes.STRING,
-  mana_cost: DataTypes.STRING,
-  type_line: DataTypes.STRING,
-  oracle_text: DataTypes.TEXT,
-  colors: DataTypes.STRING,
-  set: DataTypes.STRING, // short set code (like "2xm")
-  set_name: DataTypes.STRING,
-  collector_number: DataTypes.STRING,
-  artist: DataTypes.STRING,
-  released_at: DataTypes.DATEONLY,
-  image_uris: DataTypes.JSON,   
-  legalities: DataTypes.JSON,
-  layout: DataTypes.STRING  
+class Card extends Model {}
+
+Card.init({
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    field: 'card_name', // Maps to 'card_name' in the DB
+  },
+  mana_cost: {
+    type: DataTypes.STRING,
+  },
+  type_line: {
+    type: DataTypes.STRING,
+  },
+  oracle_text: {
+    type: DataTypes.TEXT,
+  },
+  colors: {
+    type: DataTypes.JSON,
+  },
+  set: {
+    type: DataTypes.STRING,
+  },
+  set_name: {
+    type: DataTypes.STRING,
+  },
+  collector_number: {
+    type: DataTypes.STRING,
+  },
+  artist: {
+    type: DataTypes.STRING,
+  },
+  released_at: {
+    type: DataTypes.DATEONLY,
+  },
+  image_uris: {
+    type: DataTypes.JSON,
+  },
+  legalities: {
+    type: DataTypes.JSON,
+  },
+  layout: {
+    type: DataTypes.STRING,
+  },
 }, {
-  indexes: [
-    {
-      unique: true,
-      fields: ['name', 'set', 'collector_number']
-    }
-  ]
+  sequelize,
+  modelName: 'Card',
+  tableName: 'cards',
+  timestamps: true, // Enables createdAt and updatedAt
+  underscored: false,
 });
 
-module.exports = Card;
+export default Card;

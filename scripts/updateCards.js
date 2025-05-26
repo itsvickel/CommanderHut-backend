@@ -1,5 +1,5 @@
 const axios = require("axios");
-const Card = require("../models/card");
+const Card = require("../models/Card");
 const sequelize = require("../models");
 require("dotenv").config();
 

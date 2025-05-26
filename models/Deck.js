@@ -1,10 +1,10 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
-const Card = require('./Card');
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
 
+// Define the Deck model
 const Deck = sequelize.define('Deck', {
   id: {
-    type: DataTypes.STRING, // UUID or custom string ID
+    type: DataTypes.STRING,
     primaryKey: true,
   },
   deck_name: {
@@ -12,11 +12,7 @@ const Deck = sequelize.define('Deck', {
     allowNull: false,
   },
   format: {
-    type: DataTypes.ENUM('Commander', 'Standard', 'Modern'), // extend if needed
-    allowNull: false,
-  },
-  deck_list: {
-    type: DataTypes.JSON,
+    type: DataTypes.ENUM('Commander', 'Standard', 'Modern'),
     allowNull: false,
   },
   commander: {
@@ -33,7 +29,7 @@ const Deck = sequelize.define('Deck', {
   },
   owner_id: {
     type: DataTypes.STRING,
-    allowNull: false,
+    allowNull: true,
   },
   owner_email: {
     type: DataTypes.STRING,
@@ -56,7 +52,7 @@ const Deck = sequelize.define('Deck', {
   }
 }, {
   tableName: 'decks',
-  timestamps: false, // manually managing created_at and updated_at
+  timestamps: false,
 });
 
-module.exports = Deck;
+export default Deck;

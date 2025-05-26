@@ -1,53 +1,57 @@
-// controllers/deckController.js
-const { User, Deck, Card, DeckCard } = require('../models');
+import { User, Deck, Card, DeckCard } from '../models/index.js';
+import { Op } from 'sequelize';
+
+// Helper function to generate unique deck ID (you can use libraries like uuid)
+function generateUniqueId() {
+  // Example using UUID; you can use another method if preferred
+  return import('uuid').then(({ v4 }) => v4());
+}
 
 const createDeckWithCards = async (req, res) => {
-  console.log('Received request to create deck');
-  const { email_address, deck_name, cards, format, commander, tags, is_public = false } = req.body; // Added tags and is_public
+  const { email_address, deck_name, deck_list, format, commander, tags, is_public = false } = req.body;
+
+  //console.log(email_address, deck_name, deck_list, format, commander, tags);
 
   try {
-    // Find user by email_address
-    const user = await User.findOne({ where: { email_address } });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    let user = null;
+    if (email_address) {
+      user = await User.findOne({ where: { email_address } });
+      if (!user) return res.status(404).json({ error: 'User not found' });
     }
 
-    // Prepare the deck list as a JSON object
-    const deckList = cards.map(({ id, quantity = 1 }) => ({
-      card_id: id, // Use the card id (from the passed object)
-      quantity
-    }));
+    const deckId = await generateUniqueId();
 
-    // Create a new deck
     const newDeck = await Deck.create({
-      id: generateUniqueId(), // Ensure you have a method for generating a unique ID
+      id: deckId,
       deck_name,
       format,
-      deck_list: deckList, // Store deck list as a JSON string
-      commander: format === 'Commander' ? commander : null, // Only set commander if format is Commander
-      owner_id: user.id,
-      owner_email: email_address, // Store user email in the deck
-      tags, // Store deck tags
-      is_public, // Store the public visibility flag
+      commander: format === 'Commander' ? commander : null,
+      owner_id: user ? user.id : null,
+      owner_email: email_address || 'anonymous',
+      tags,
+      is_public,
     });
 
-    // Respond with a success message and the created deck
+    console.log(deckId);
+    // Insert cards into deck_cards table
+    const cardEntries = deck_list.map(({ id, quantity }) => ({
+      deck_id: deckId,
+      card_id: id,
+      quantity: quantity,
+    }));
+
+    await DeckCard.bulkCreate(cardEntries);
+
     res.status(201).json({
       message: 'Deck created successfully',
       deck: newDeck,
-      cards: deckList
+      cards: cardEntries,
     });
   } catch (err) {
     console.error('Error creating deck:', err);
     res.status(500).json({ error: 'Failed to create deck' });
   }
 };
-
-// Helper function to generate unique deck ID (you can use libraries like uuid)
-function generateUniqueId() {
-  // Example using UUID; you can use another method if preferred
-  return require('uuid').v4();
-}
 
 // Get decks by user_id
 const getDecksByUser = async (req, res) => {
@@ -95,8 +99,68 @@ const getDecks = async (req, res) => {
   }
 };
 
-module.exports = {
-  createDeckWithCards,
-  getDecksByUser,
-  getDecks
+const getDeckByID = async (req, res) => {
+  const deckId = req.params.id || req.body.id; // You can choose to use params or body
+  if (!deckId) {
+    return res.status(400).json({ error: 'Deck ID is required' });
+  }
+
+  try {
+    // Fetch the deck along with the associated deckcards
+    const deck = await Deck.findOne({
+      where: { id: deckId },
+      include: [
+        {
+          model: DeckCard, // Include the deckcards
+          as: 'deckCards',
+          include: [
+            {
+              model: Card, // Include the card information for each deckcard
+              as: 'card',  // Define the association
+              attributes: ['id', 'name', 'type', 'mana_cost'], // Select the fields you want
+            }
+          ]
+        },
+        {
+          model: User,
+          attributes: ['email_address']
+        }
+      ]
+    });
+
+    if (!deck) {
+      return res.status(404).json({ error: 'Deck not found' });
+    }
+
+    // Match cards with quantities
+    const fullCardList = deck.deckCards.map((deckCard) => {
+      const card = deckCard.card; // Access the card associated with each deckcard
+      return {
+        quantity: deckCard.quantity,
+        ...card.dataValues
+      };
+    });
+
+    res.status(200).json({
+      deck: {
+        id: deck.id,
+        deck_name: deck.deck_name,
+        format: deck.format,
+        commander: deck.commander,
+        created_at: deck.created_at,
+        updated_at: deck.updated_at,
+        owner_id: deck.owner_id,
+        owner_email: deck.User?.email_address || null,
+        is_public: deck.is_public,
+        tags: deck.tags || [],
+        card_list: fullCardList
+      }
+    });
+    
+  } catch (err) {
+    console.error('Error fetching deck by ID:', err);
+    res.status(500).json({ error: 'Failed to fetch deck' });
+  }
 };
+
+export { createDeckWithCards, getDecksByUser, getDecks, getDeckByID };

@@ -1,19 +1,29 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/db.js';
 
+// Define the DeckCard model
 const DeckCard = sequelize.define('DeckCard', {
-  deck_id: {
+  id: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  deck_id: {
+    type: DataTypes.STRING,
+    allowNull: false,
   },
   card_id: {
-    type: DataTypes.INTEGER,
-    allowNull: false
+    type: DataTypes.STRING,
+    allowNull: false,
   },
   quantity: {
     type: DataTypes.INTEGER,
-    defaultValue: 1
-  }
+    defaultValue: 1,
+  },
+}, {
+  tableName: 'deck_cards',
+  timestamps: false,
 });
+ 
 
-module.exports = DeckCard;
+export default DeckCard;
