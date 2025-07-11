@@ -4,23 +4,33 @@ import Deck from './Deck.js';
 import Card from './Card.js';
 import DeckCard from './DeckCard.js';
 
-// Define associations after all models are imported
-User.hasMany(Deck, { foreignKey: 'user_id' });
-Deck.belongsTo(User, { foreignKey: 'user_id' });
+// === Define associations ===
 
+// User → Deck
+User.hasMany(Deck, { foreignKey: 'owner_id', as: 'userDecks' });
+Deck.belongsTo(User, { foreignKey: 'owner_id', as: 'owner' });
+
+// Deck → DeckCard
+Deck.hasMany(DeckCard, { foreignKey: 'deck_id', as: 'deck_cards' });
+DeckCard.belongsTo(Deck, { foreignKey: 'deck_id' });
+
+// Card → DeckCard
+Card.hasMany(DeckCard, { foreignKey: 'card_id', as: 'cardEntries' });
+DeckCard.belongsTo(Card, { foreignKey: 'card_id', as: 'card' });
+
+// Optional: Deck ↔ Card through DeckCard (many-to-many)
 Deck.belongsToMany(Card, {
   through: DeckCard,
   foreignKey: 'deck_id',
-  as: 'cardsInDeck', // Alias for Deck -> Card
+  otherKey: 'card_id',
+  as: 'cardsInDeck'
 });
 Card.belongsToMany(Deck, {
   through: DeckCard,
   foreignKey: 'card_id',
-  as: 'decksContainingCard', // Alias for Card -> Deck
+  otherKey: 'deck_id',
+  as: 'decksContainingCard'
 });
 
-Deck.hasMany(DeckCard, { foreignKey: 'deck_id', as: 'deckCardsList' });
-Card.hasMany(DeckCard, { foreignKey: 'card_id', as: 'cardCardsList' });
-
-// Export all models
+// === Export models ===
 export { sequelize, User, Deck, Card, DeckCard };

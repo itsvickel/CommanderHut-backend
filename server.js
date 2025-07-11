@@ -6,6 +6,7 @@ import userRoutes from './routes/userRoutes.js';
 import deckRoutes from './routes/deckRoutes.js';
 import loginRoutes from './routes/loginRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import aiRoutes from './routes/aiRoutes.js';
 
 import cors from 'cors';
 
@@ -26,6 +27,7 @@ app.use('/api', userRoutes);
 app.use('/api', deckRoutes);
 app.use('/api', loginRoutes);
 app.use('/api', authRoutes);
+app.use('/api', aiRoutes);
 
 // Sync models AFTER associations are registered
 // await sequelize.sync({ force: true }) // This will force a full sync and drop existing tables

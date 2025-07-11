@@ -10,7 +10,7 @@ function generateUniqueId() {
 const createDeckWithCards = async (req, res) => {
   const { email_address, deck_name, deck_list, format, commander, tags, is_public = false } = req.body;
 
-  //console.log(email_address, deck_name, deck_list, format, commander, tags);
+  console.log(email_address, deck_name, deck_list, format, commander, tags);
 
   try {
     let user = null;
@@ -32,11 +32,10 @@ const createDeckWithCards = async (req, res) => {
       is_public,
     });
 
-    console.log(deckId);
     // Insert cards into deck_cards table
-    const cardEntries = deck_list.map(({ id, quantity }) => ({
+    const cardEntries = deck_list.map(({ card_id, quantity }) => ({
       deck_id: deckId,
-      card_id: id,
+      card_id: card_id,
       quantity: quantity,
     }));
 
@@ -71,20 +70,33 @@ const getDecksByUser = async (req, res) => {
   }
 };
 
-// Get all decks 
 const getDecks = async (req, res) => {
-  const page = parseInt(req.query.page) || 1; // default to page 1
-  const limit = parseInt(req.query.limit) || 20; // default to 20 decks per page
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
   const offset = (page - 1) * limit;
 
   try {
     const { count, rows: decks } = await Deck.findAndCountAll({
       include: [
-        { model: Card },
-        { model: User, attributes: ['email_address'] }
+        {
+          model: DeckCard,
+          as: 'deck_cards',
+          include: [
+            {
+              model: Card,
+              as: 'card'
+            }
+          ]
+        },
+        {
+          model: User,
+          as: 'owner',
+          attributes: ['email_address']
+        }
       ],
       limit,
-      offset
+      offset,
+      order: [['created_at', 'DESC']]
     });
 
     res.status(200).json({
@@ -100,29 +112,44 @@ const getDecks = async (req, res) => {
 };
 
 const getDeckByID = async (req, res) => {
-  const deckId = req.params.id || req.body.id; // You can choose to use params or body
+  const deckId = req.params.id || req.body.id;
   if (!deckId) {
     return res.status(400).json({ error: 'Deck ID is required' });
   }
 
   try {
-    // Fetch the deck along with the associated deckcards
     const deck = await Deck.findOne({
       where: { id: deckId },
       include: [
         {
-          model: DeckCard, // Include the deckcards
-          as: 'deckCards',
+          model: DeckCard,
+          as: 'deck_cards', // ✅ Fixed alias here
           include: [
             {
-              model: Card, // Include the card information for each deckcard
-              as: 'card',  // Define the association
-              attributes: ['id', 'name', 'type', 'mana_cost'], // Select the fields you want
+              model: Card,
+              as: 'card', // ✅ Already correct
+              attributes: [
+                'id',
+                'name',
+                'type_line',
+                'mana_cost',
+                'oracle_text',
+                'colors',
+                'set',
+                'set_name',
+                'collector_number',
+                'artist',
+                'released_at',
+                'image_uris',
+                'legalities',
+                'layout',
+              ],
             }
           ]
         },
         {
           model: User,
+          as: 'owner', // ✅ Match your association Deck.belongsTo(User, { as: 'owner' })
           attributes: ['email_address']
         }
       ]
@@ -132,9 +159,9 @@ const getDeckByID = async (req, res) => {
       return res.status(404).json({ error: 'Deck not found' });
     }
 
-    // Match cards with quantities
-    const fullCardList = deck.deckCards.map((deckCard) => {
-      const card = deckCard.card; // Access the card associated with each deckcard
+    // ✅ Access with correct alias
+    const fullCardList = deck.deck_cards.map((deckCard) => {
+      const card = deckCard.card;
       return {
         quantity: deckCard.quantity,
         ...card.dataValues
@@ -150,17 +177,18 @@ const getDeckByID = async (req, res) => {
         created_at: deck.created_at,
         updated_at: deck.updated_at,
         owner_id: deck.owner_id,
-        owner_email: deck.User?.email_address || null,
+        owner_email: deck.owner?.email_address || null,
         is_public: deck.is_public,
         tags: deck.tags || [],
         card_list: fullCardList
       }
     });
-    
+
   } catch (err) {
     console.error('Error fetching deck by ID:', err);
     res.status(500).json({ error: 'Failed to fetch deck' });
   }
 };
+
 
 export { createDeckWithCards, getDecksByUser, getDecks, getDeckByID };
