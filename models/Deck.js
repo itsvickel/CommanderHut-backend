@@ -1,58 +1,21 @@
-import { DataTypes } from 'sequelize';
-import sequelize from '../config/db.js';
+import mongoose from 'mongoose';
 
-// Define the Deck model
-const Deck = sequelize.define('Deck', {
-  id: {
-    type: DataTypes.STRING,
-    primaryKey: true,
-  },
-  deck_name: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  format: {
-    type: DataTypes.ENUM('Commander', 'Standard', 'Modern'),
-    allowNull: false,
-  },
-  commander: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  created_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-  },
-  updated_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-  },
-  owner_id: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  owner_email: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
-  tags: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    get() {
-      const raw = this.getDataValue('tags');
-      return raw ? JSON.parse(raw) : [];
-    },
-    set(val) {
-      this.setDataValue('tags', JSON.stringify(val));
-    }
-  },
-  is_public: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false,
-  }
+const deckCardSubSchema = new mongoose.Schema({
+  card: { type: mongoose.Schema.Types.ObjectId, ref: 'Card', required: true },
+  quantity: { type: Number, default: 1 },
+}, { _id: false });
+
+const deckSchema = new mongoose.Schema({
+  deck_name: { type: String, required: true },
+  format: { type: String, enum: ['Commander', 'Standard', 'Modern'], required: true },
+  commander: { type: String },
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  owner_email: { type: String },
+  tags: { type: [String], default: [] },
+  is_public: { type: Boolean, default: false },
+  cards: [deckCardSubSchema], // Embedded cards array
 }, {
-  tableName: 'decks',
-  timestamps: false,
+  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
 });
 
-export default Deck;
+export default mongoose.model('Deck', deckSchema);

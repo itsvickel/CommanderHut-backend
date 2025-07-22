@@ -15,9 +15,8 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.17.0",
-    "mysql2": "^3.14.0",
+    "mongoose": "^8.16.4",
     "node-cron": "^3.0.3",
-    "openai": "^5.9.0",
-    "sequelize": "^6.37.7"
+    "openai": "^5.9.0"
   }
 }

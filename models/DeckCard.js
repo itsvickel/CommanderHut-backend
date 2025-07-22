@@ -1,29 +1,9 @@
-import { DataTypes } from 'sequelize';
-import sequelize from '../config/db.js';
+import mongoose from 'mongoose';
 
-// Define the DeckCard model
-const DeckCard = sequelize.define('DeckCard', {
-  id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
-    primaryKey: true,
-  },
-  deck_id: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  card_id: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  quantity: {
-    type: DataTypes.INTEGER,
-    defaultValue: 1,
-  },
-}, {
-  tableName: 'deck_cards',
-  timestamps: false,
-});
- 
+const deckCardSchema = new mongoose.Schema({
+  deck: { type: mongoose.Schema.Types.ObjectId, ref: 'Deck', required: true },
+  card: { type: mongoose.Schema.Types.ObjectId, ref: 'Card', required: true },
+  quantity: { type: Number, default: 1 },
+}, { timestamps: false });
 
-export default DeckCard;
+export default mongoose.model('DeckCard', deckCardSchema);

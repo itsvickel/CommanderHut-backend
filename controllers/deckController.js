@@ -1,194 +1,85 @@
-import { User, Deck, Card, DeckCard } from '../models/index.js';
-import { Op } from 'sequelize';
+import mongoose from 'mongoose';
+import Deck from '../models/Deck.js';
 
-// Helper function to generate unique deck ID (you can use libraries like uuid)
-function generateUniqueId() {
-  // Example using UUID; you can use another method if preferred
-  return import('uuid').then(({ v4 }) => v4());
-}
+export const createDeckWithCards = async (req, res) => {
+  const { owner, deck_name, format, commander, deck_list, tags, is_public } = req.body;
 
-const createDeckWithCards = async (req, res) => {
-  const { email_address, deck_name, deck_list, format, commander, tags, is_public = false } = req.body;
+  if (!owner || !deck_name || !deck_list || !Array.isArray(deck_list)) {
+    return res.status(400).json({ error: 'Missing required fields or invalid cards format' });
+  }
 
-  console.log(email_address, deck_name, deck_list, format, commander, tags);
+  if (!['Commander', 'Standard', 'Modern'].includes(format)) {
+    return res.status(400).json({ error: 'Invalid format value' });
+  }
+
+  // Validate deck_list items for card ObjectId and quantity >= 1
+  for (const [index, cardEntry] of deck_list.entries()) {
+    if (
+      !cardEntry.card ||
+      !mongoose.Types.ObjectId.isValid(cardEntry.card) ||
+      typeof cardEntry.quantity !== 'number' ||
+      cardEntry.quantity < 1
+    ) {
+      return res.status(400).json({
+        error: `Invalid card entry at index ${index}: each card must have a valid 'card' ObjectId and 'quantity' >= 1`
+      });
+    }
+  }
 
   try {
-    let user = null;
-    if (email_address) {
-      user = await User.findOne({ where: { email_address } });
-      if (!user) return res.status(404).json({ error: 'User not found' });
-    }
-
-    const deckId = await generateUniqueId();
-
-    const newDeck = await Deck.create({
-      id: deckId,
+    const deck = await Deck.create({
+      owner,
       deck_name,
       format,
-      commander: format === 'Commander' ? commander : null,
-      owner_id: user ? user.id : null,
-      owner_email: email_address || 'anonymous',
-      tags,
-      is_public,
+      commander,
+      cards: deck_list,
+      tags: tags || [],
+      is_public: !!is_public,
     });
 
-    // Insert cards into deck_cards table
-    const cardEntries = deck_list.map(({ card_id, quantity }) => ({
-      deck_id: deckId,
-      card_id: card_id,
-      quantity: quantity,
-    }));
-
-    await DeckCard.bulkCreate(cardEntries);
-
-    res.status(201).json({
-      message: 'Deck created successfully',
-      deck: newDeck,
-      cards: cardEntries,
-    });
-  } catch (err) {
-    console.error('Error creating deck:', err);
-    res.status(500).json({ error: 'Failed to create deck' });
+    res.status(201).json(deck);
+  } catch (error) {
+    console.error('Error creating deck:', error);
+    res.status(500).json({ error: 'Failed to create deck', details: error.message });
   }
 };
 
-// Get decks by user_id
-const getDecksByUser = async (req, res) => {
-  const { user_id } = req.params;
 
+export const getDecksByUser = async (req, res) => {
+  const { userId } = req.params;
   try {
-    // Find all decks associated with a user_id
-    const decks = await Deck.findAll({
-      where: { user_id },
-      include: [{ model: Card }] // Include associated cards in the response
-    });
-
+    const decks = await Deck.find({ user_id: userId });
     res.status(200).json(decks);
-  } catch (err) {
-    console.error('Error fetching decks:', err);
+  } catch (error) {
+    console.error('Error fetching decks by user:', error);
+    res.status(500).json({ error: 'Failed to fetch decks by user' });
+  }
+};
+
+export const getDecks = async (_, res) => {
+  try {
+    const decks = await Deck.find();
+    res.status(200).json(decks);
+  } catch (error) {
+    console.error('Error fetching decks:', error);
     res.status(500).json({ error: 'Failed to fetch decks' });
   }
 };
 
-const getDecks = async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
-  const offset = (page - 1) * limit;
+export const getDeckByID = async (req, res) => {
+  const { id } = req.params;
 
-  try {
-    const { count, rows: decks } = await Deck.findAndCountAll({
-      include: [
-        {
-          model: DeckCard,
-          as: 'deck_cards',
-          include: [
-            {
-              model: Card,
-              as: 'card'
-            }
-          ]
-        },
-        {
-          model: User,
-          as: 'owner',
-          attributes: ['email_address']
-        }
-      ],
-      limit,
-      offset,
-      order: [['created_at', 'DESC']]
-    });
-
-    res.status(200).json({
-      total: count,
-      page,
-      pageCount: Math.ceil(count / limit),
-      decks
-    });
-  } catch (err) {
-    console.error('Error fetching decks:', err);
-    res.status(500).json({ error: 'Failed to fetch decks' });
-  }
-};
-
-const getDeckByID = async (req, res) => {
-  const deckId = req.params.id || req.body.id;
-  if (!deckId) {
-    return res.status(400).json({ error: 'Deck ID is required' });
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'Invalid deck ID' });
   }
 
   try {
-    const deck = await Deck.findOne({
-      where: { id: deckId },
-      include: [
-        {
-          model: DeckCard,
-          as: 'deck_cards', // ✅ Fixed alias here
-          include: [
-            {
-              model: Card,
-              as: 'card', // ✅ Already correct
-              attributes: [
-                'id',
-                'name',
-                'type_line',
-                'mana_cost',
-                'oracle_text',
-                'colors',
-                'set',
-                'set_name',
-                'collector_number',
-                'artist',
-                'released_at',
-                'image_uris',
-                'legalities',
-                'layout',
-              ],
-            }
-          ]
-        },
-        {
-          model: User,
-          as: 'owner', // ✅ Match your association Deck.belongsTo(User, { as: 'owner' })
-          attributes: ['email_address']
-        }
-      ]
-    });
-
-    if (!deck) {
-      return res.status(404).json({ error: 'Deck not found' });
-    }
-
-    // ✅ Access with correct alias
-    const fullCardList = deck.deck_cards.map((deckCard) => {
-      const card = deckCard.card;
-      return {
-        quantity: deckCard.quantity,
-        ...card.dataValues
-      };
-    });
-
-    res.status(200).json({
-      deck: {
-        id: deck.id,
-        deck_name: deck.deck_name,
-        format: deck.format,
-        commander: deck.commander,
-        created_at: deck.created_at,
-        updated_at: deck.updated_at,
-        owner_id: deck.owner_id,
-        owner_email: deck.owner?.email_address || null,
-        is_public: deck.is_public,
-        tags: deck.tags || [],
-        card_list: fullCardList
-      }
-    });
-
-  } catch (err) {
-    console.error('Error fetching deck by ID:', err);
-    res.status(500).json({ error: 'Failed to fetch deck' });
+    // Populate cards.card to get card details
+    const deck = await Deck.findById(id).populate('cards.card');
+    if (!deck) return res.status(404).json({ error: 'Deck not found' });
+    res.status(200).json(deck);
+  } catch (error) {
+    console.error('Error fetching deck by ID:', error);
+    res.status(500).json({ error: 'Failed to fetch deck by ID' });
   }
 };
-
-
-export { createDeckWithCards, getDecksByUser, getDecks, getDeckByID };
