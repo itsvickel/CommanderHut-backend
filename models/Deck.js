@@ -9,7 +9,13 @@ const deckSchema = new mongoose.Schema({
   deck_name: { type: String, required: true },
   format: { type: String, enum: ['Commander', 'Standard', 'Modern'], required: true },
   commander: { type: String },
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  commander_image: { type: String },  // <-- new field for commander image URL
+  owner: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false,
+    default: null,
+  },
   owner_email: { type: String },
   tags: { type: [String], default: [] },
   is_public: { type: Boolean, default: false },

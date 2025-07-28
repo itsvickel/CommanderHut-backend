@@ -1,8 +1,9 @@
 import express from 'express';
-import generateDeck from '../controllers/aiController.js';
+import { 
+  generateMTGIdea
+} from '../controllers/geminiAIController.js';
 
-const router = express.Router();
+const router = express.Router(); 
+router.post('/ai', generateMTGIdea);
 
-router.post('/deck', generateDeck);
-
-export default router;
+export default router; 

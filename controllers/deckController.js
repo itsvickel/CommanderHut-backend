@@ -1,48 +1,86 @@
 import mongoose from 'mongoose';
 import Deck from '../models/Deck.js';
-
+import Card from '../models/Card.js'; // Ensure this points to your Card model
 export const createDeckWithCards = async (req, res) => {
-  const { owner, deck_name, format, commander, deck_list, tags, is_public } = req.body;
+  let { owner, deck_name, format, commander, commander_image, deck_list, tags, is_public } = req.body;
 
-  if (!owner || !deck_name || !deck_list || !Array.isArray(deck_list)) {
-    return res.status(400).json({ error: 'Missing required fields or invalid cards format' });
+  if ((!owner || owner === 'anonymous') && deck_name && deck_list && Array.isArray(deck_list)) {
+    // For anonymous decks, set owner to null before saving
+    owner = null;
+  }
+
+  if (owner && owner !== 'anonymous' && !mongoose.Types.ObjectId.isValid(owner)) {
+    return res.status(400).json({ error: 'Invalid owner ID' });
   }
 
   if (!['Commander', 'Standard', 'Modern'].includes(format)) {
     return res.status(400).json({ error: 'Invalid format value' });
   }
 
-  // Validate deck_list items for card ObjectId and quantity >= 1
-  for (const [index, cardEntry] of deck_list.entries()) {
-    if (
-      !cardEntry.card ||
-      !mongoose.Types.ObjectId.isValid(cardEntry.card) ||
-      typeof cardEntry.quantity !== 'number' ||
-      cardEntry.quantity < 1
-    ) {
-      return res.status(400).json({
-        error: `Invalid card entry at index ${index}: each card must have a valid 'card' ObjectId and 'quantity' >= 1`
-      });
-    }
-  }
+  // Step 1: Extract all unique card names from deck_list
+  const uniqueCardNames = [
+    ...new Set(deck_list.map((entry) => entry.card?.trim()).filter(Boolean))
+  ];
 
   try {
-    const deck = await Deck.create({
+    // Step 2: Lookup all names in one bulk query (case-insensitive)
+    const foundCards = await Card.find({
+      name: { $in: uniqueCardNames.map(name => new RegExp(`^${name}$`, 'i')) }
+    }).lean();
+
+    const nameToCardMap = new Map(
+      foundCards.map((card) => [card.name.toLowerCase(), card])
+    );
+
+    const notFoundNames = [];
+    const validDeckList = [];
+
+    // Step 3: Build the validated deck list
+    for (const [index, { card: cardName, quantity }] of deck_list.entries()) {
+      if (typeof cardName !== 'string' || typeof quantity !== 'number' || quantity < 1) {
+        return res.status(400).json({
+          error: `Invalid card entry at index ${index}: each card must have a valid 'card' name (string) and 'quantity' >= 1`,
+        });
+      }
+
+      const matchedCard = nameToCardMap.get(cardName.toLowerCase());
+      if (!matchedCard) {
+        notFoundNames.push(cardName);
+      } else {
+        validDeckList.push({
+          card: matchedCard._id,
+          quantity,
+        });
+      }
+    }
+
+    // Step 4: If any cards weren't found, return error
+    if (notFoundNames.length > 0) {
+      return res.status(400).json({
+        error: 'Some cards were not found in the database.',
+        notFound: notFoundNames,
+      });
+    }
+
+    // Step 5: Create the deck, include commander_image
+    const newDeck = await Deck.create({
       owner,
       deck_name,
       format,
       commander,
-      cards: deck_list,
+      commander_image,   // <-- new field added here
+      cards: validDeckList,
       tags: tags || [],
       is_public: !!is_public,
     });
 
-    res.status(201).json(deck);
-  } catch (error) {
-    console.error('Error creating deck:', error);
-    res.status(500).json({ error: 'Failed to create deck', details: error.message });
+    return res.status(201).json(newDeck);
+  } catch (err) {
+    console.error('Error creating deck:', err);
+    return res.status(500).json({ error: 'Failed to create deck', details: err.message });
   }
 };
+
 
 
 export const getDecksByUser = async (req, res) => {

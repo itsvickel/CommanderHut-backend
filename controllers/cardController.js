@@ -100,3 +100,21 @@ export const postCardsBulkByName = async (req, res) => {
     res.status(500).json({ error: 'Failed to retrieve cards.' });
   }
 };
+
+export const postBulkLookupByName = async (req, res) => {
+  const names = req.body.names;
+
+  if (!Array.isArray(names) || names.length === 0) {
+    return res.status(400).json({ error: 'Names array is required' });
+  }
+
+  try {
+    const cards = await Card.find({
+      name: { $in: names }
+    });
+
+    res.json(cards);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch cards' });
+  }
+};
