@@ -1,9 +1,13 @@
-import express from 'express';
-import { 
-  generateMTGIdea
-} from '../controllers/geminiAIController.js';
+import express from "express";
+import { generateDeckDeepSeek } from "../controllers/ai/deepseekAIController.js";
+import { generateDeckGemini } from "../controllers/ai/geminiAIController.js";
 
-const router = express.Router(); 
-router.post('/ai', generateMTGIdea);
+const router = express.Router();
 
-export default router; 
+// Route for DeepSeek
+router.post("/deepseek", generateDeckDeepSeek);
+
+// Route for Gemini
+router.post("/gemini", generateDeckGemini);
+
+export default router;

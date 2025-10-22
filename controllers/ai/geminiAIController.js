@@ -10,7 +10,7 @@ const ai = new GoogleGenAI({
  * @param {string} prompt - The user's request.
  * @returns {string} AI-generated MTG response.
  */
-export async function generateMTGIdea(req, res) {
+export async function generateDeckGemini(req, res) {
   const prompt = req.body.prompt;
   console.log(prompt);
   if (!prompt || typeof prompt !== "string") {
