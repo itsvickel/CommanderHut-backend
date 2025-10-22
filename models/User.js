@@ -1,37 +1,14 @@
-import { DataTypes } from 'sequelize';
-import sequelize from '../config/db.js';
+import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 
-const User = sequelize.define('User', {
-  id: {
-    type: DataTypes.STRING,
-    defaultValue: () => uuidv4(),
-    primaryKey: true,
-  },
-  username: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  email_address: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    unique: true, // OK now that we dropped the table
-  },
-  password: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  created_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-  },
-  updated_at: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-  }
+const userSchema = new mongoose.Schema({
+  _id: { type: String, default: uuidv4 }, // Use UUID instead of default ObjectId
+  username: { type: String, required: true },
+  email_address: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
 }, {
-  tableName: 'users',
-  timestamps: false, // you're manually handling created_at/updated_at
+  _id: false,
+  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
 });
 
-export default User;
+export default mongoose.model('User', userSchema);

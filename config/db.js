@@ -1,18 +1,18 @@
-import dotenv from 'dotenv';  // Import dotenv
-dotenv.config();  // Load environment variables from .env file
+import mongoose from 'mongoose';
 
-import { Sequelize } from 'sequelize';
+const uri = process.env.MONGODB_URI;
 
-const sequelize = new Sequelize({
-  host: 'localhost', // Ensure this is correctly set
-  dialect: 'mysql',
-  username: 'root',
-  password: 'VentricleSwornEnlarged',
-  database: 'mtg_deck',
-  port: '3306',
-  define: {
-    timestamps: false, // Example to define options globally
-  },
-});
+async function connectDB() {
+  try {
+    await mongoose.connect(uri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log('MongoDB connected');
+  } catch (err) {
+    console.error('MongoDB connection error:', err);
+    throw err;
+  }
+}
 
-export default sequelize;
+export default connectDB;

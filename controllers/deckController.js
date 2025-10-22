@@ -1,194 +1,123 @@
-import { User, Deck, Card, DeckCard } from '../models/index.js';
-import { Op } from 'sequelize';
+import mongoose from 'mongoose';
+import Deck from '../models/Deck.js';
+import Card from '../models/Card.js'; // Ensure this points to your Card model
+export const createDeckWithCards = async (req, res) => {
+  let { owner, deck_name, format, commander, commander_image, deck_list, tags, is_public } = req.body;
 
-// Helper function to generate unique deck ID (you can use libraries like uuid)
-function generateUniqueId() {
-  // Example using UUID; you can use another method if preferred
-  return import('uuid').then(({ v4 }) => v4());
-}
+  if ((!owner || owner === 'anonymous') && deck_name && deck_list && Array.isArray(deck_list)) {
+    // For anonymous decks, set owner to null before saving
+    owner = null;
+  }
 
-const createDeckWithCards = async (req, res) => {
-  const { email_address, deck_name, deck_list, format, commander, tags, is_public = false } = req.body;
+  if (owner && owner !== 'anonymous' && !mongoose.Types.ObjectId.isValid(owner)) {
+    return res.status(400).json({ error: 'Invalid owner ID' });
+  }
 
-  console.log(email_address, deck_name, deck_list, format, commander, tags);
+  if (!['Commander', 'Standard', 'Modern'].includes(format)) {
+    return res.status(400).json({ error: 'Invalid format value' });
+  }
+
+  // Step 1: Extract all unique card names from deck_list
+  const uniqueCardNames = [
+    ...new Set(deck_list.map((entry) => entry.card?.trim()).filter(Boolean))
+  ];
 
   try {
-    let user = null;
-    if (email_address) {
-      user = await User.findOne({ where: { email_address } });
-      if (!user) return res.status(404).json({ error: 'User not found' });
+    // Step 2: Lookup all names in one bulk query (case-insensitive)
+    const foundCards = await Card.find({
+      name: { $in: uniqueCardNames.map(name => new RegExp(`^${name}$`, 'i')) }
+    }).lean();
+
+    const nameToCardMap = new Map(
+      foundCards.map((card) => [card.name.toLowerCase(), card])
+    );
+
+    const notFoundNames = [];
+    const validDeckList = [];
+
+    // Step 3: Build the validated deck list
+    for (const [index, { card: cardName, quantity }] of deck_list.entries()) {
+      if (typeof cardName !== 'string' || typeof quantity !== 'number' || quantity < 1) {
+        return res.status(400).json({
+          error: `Invalid card entry at index ${index}: each card must have a valid 'card' name (string) and 'quantity' >= 1`,
+        });
+      }
+
+      const matchedCard = nameToCardMap.get(cardName.toLowerCase());
+      if (!matchedCard) {
+        notFoundNames.push(cardName);
+      } else {
+        validDeckList.push({
+          card: matchedCard._id,
+          quantity,
+        });
+      }
     }
 
-    const deckId = await generateUniqueId();
+    // Step 4: If any cards weren't found, return error
+    if (notFoundNames.length > 0) {
+      return res.status(400).json({
+        error: 'Some cards were not found in the database.',
+        notFound: notFoundNames,
+      });
+    }
 
+    // Step 5: Create the deck, include commander_image
     const newDeck = await Deck.create({
-      id: deckId,
+      owner,
       deck_name,
       format,
-      commander: format === 'Commander' ? commander : null,
-      owner_id: user ? user.id : null,
-      owner_email: email_address || 'anonymous',
-      tags,
-      is_public,
+      commander,
+      commander_image,   // <-- new field added here
+      cards: validDeckList,
+      tags: tags || [],
+      is_public: !!is_public,
     });
 
-    // Insert cards into deck_cards table
-    const cardEntries = deck_list.map(({ card_id, quantity }) => ({
-      deck_id: deckId,
-      card_id: card_id,
-      quantity: quantity,
-    }));
-
-    await DeckCard.bulkCreate(cardEntries);
-
-    res.status(201).json({
-      message: 'Deck created successfully',
-      deck: newDeck,
-      cards: cardEntries,
-    });
+    return res.status(201).json(newDeck);
   } catch (err) {
     console.error('Error creating deck:', err);
-    res.status(500).json({ error: 'Failed to create deck' });
+    return res.status(500).json({ error: 'Failed to create deck', details: err.message });
   }
 };
 
-// Get decks by user_id
-const getDecksByUser = async (req, res) => {
-  const { user_id } = req.params;
 
+
+export const getDecksByUser = async (req, res) => {
+  const { userId } = req.params;
   try {
-    // Find all decks associated with a user_id
-    const decks = await Deck.findAll({
-      where: { user_id },
-      include: [{ model: Card }] // Include associated cards in the response
-    });
-
+    const decks = await Deck.find({ user_id: userId });
     res.status(200).json(decks);
-  } catch (err) {
-    console.error('Error fetching decks:', err);
+  } catch (error) {
+    console.error('Error fetching decks by user:', error);
+    res.status(500).json({ error: 'Failed to fetch decks by user' });
+  }
+};
+
+export const getDecks = async (_, res) => {
+  try {
+    const decks = await Deck.find();
+    res.status(200).json(decks);
+  } catch (error) {
+    console.error('Error fetching decks:', error);
     res.status(500).json({ error: 'Failed to fetch decks' });
   }
 };
 
-const getDecks = async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
-  const offset = (page - 1) * limit;
+export const getDeckByID = async (req, res) => {
+  const { id } = req.params;
 
-  try {
-    const { count, rows: decks } = await Deck.findAndCountAll({
-      include: [
-        {
-          model: DeckCard,
-          as: 'deck_cards',
-          include: [
-            {
-              model: Card,
-              as: 'card'
-            }
-          ]
-        },
-        {
-          model: User,
-          as: 'owner',
-          attributes: ['email_address']
-        }
-      ],
-      limit,
-      offset,
-      order: [['created_at', 'DESC']]
-    });
-
-    res.status(200).json({
-      total: count,
-      page,
-      pageCount: Math.ceil(count / limit),
-      decks
-    });
-  } catch (err) {
-    console.error('Error fetching decks:', err);
-    res.status(500).json({ error: 'Failed to fetch decks' });
-  }
-};
-
-const getDeckByID = async (req, res) => {
-  const deckId = req.params.id || req.body.id;
-  if (!deckId) {
-    return res.status(400).json({ error: 'Deck ID is required' });
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'Invalid deck ID' });
   }
 
   try {
-    const deck = await Deck.findOne({
-      where: { id: deckId },
-      include: [
-        {
-          model: DeckCard,
-          as: 'deck_cards', // ✅ Fixed alias here
-          include: [
-            {
-              model: Card,
-              as: 'card', // ✅ Already correct
-              attributes: [
-                'id',
-                'name',
-                'type_line',
-                'mana_cost',
-                'oracle_text',
-                'colors',
-                'set',
-                'set_name',
-                'collector_number',
-                'artist',
-                'released_at',
-                'image_uris',
-                'legalities',
-                'layout',
-              ],
-            }
-          ]
-        },
-        {
-          model: User,
-          as: 'owner', // ✅ Match your association Deck.belongsTo(User, { as: 'owner' })
-          attributes: ['email_address']
-        }
-      ]
-    });
-
-    if (!deck) {
-      return res.status(404).json({ error: 'Deck not found' });
-    }
-
-    // ✅ Access with correct alias
-    const fullCardList = deck.deck_cards.map((deckCard) => {
-      const card = deckCard.card;
-      return {
-        quantity: deckCard.quantity,
-        ...card.dataValues
-      };
-    });
-
-    res.status(200).json({
-      deck: {
-        id: deck.id,
-        deck_name: deck.deck_name,
-        format: deck.format,
-        commander: deck.commander,
-        created_at: deck.created_at,
-        updated_at: deck.updated_at,
-        owner_id: deck.owner_id,
-        owner_email: deck.owner?.email_address || null,
-        is_public: deck.is_public,
-        tags: deck.tags || [],
-        card_list: fullCardList
-      }
-    });
-
-  } catch (err) {
-    console.error('Error fetching deck by ID:', err);
-    res.status(500).json({ error: 'Failed to fetch deck' });
+    // Populate cards.card to get card details
+    const deck = await Deck.findById(id).populate('cards.card');
+    if (!deck) return res.status(404).json({ error: 'Deck not found' });
+    res.status(200).json(deck);
+  } catch (error) {
+    console.error('Error fetching deck by ID:', error);
+    res.status(500).json({ error: 'Failed to fetch deck by ID' });
   }
 };
-
-
-export { createDeckWithCards, getDecksByUser, getDecks, getDeckByID };
