@@ -20,6 +20,8 @@ const deckSchema = new mongoose.Schema({
   tags: { type: [String], default: [] },
   is_public: { type: Boolean, default: false },
   cards: [deckCardSubSchema], // Embedded cards array
+
+  likes_count: { type: Number, default: 0 },
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
 });

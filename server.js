@@ -10,6 +10,7 @@ import deckRoutes from './routes/deckRoutes.js';
 import loginRoutes from './routes/loginRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
+import profileRoute from './routes/profileRoutes.js';
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api', deckRoutes);
 app.use('/api', loginRoutes);
 app.use('/api', authRoutes);
 app.use('/api', aiRoutes);
+app.use('/api', profileRoute);
 
 // Optional: catch-all error handler middleware
 app.use((err, req, res, next) => {
