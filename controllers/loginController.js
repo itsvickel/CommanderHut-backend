@@ -8,7 +8,7 @@ function getCookieOptions() {
     httpOnly: true,
     secure: isProd,
     sameSite: isProd ? 'none' : 'lax',
-    maxAge: 3600 * 1000,
+    maxAge: 7 * 24 * 3600 * 1000,
     path: '/',
   };
 }
@@ -29,7 +29,7 @@ export const loginUser = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, email_address: user.email_address, username: user.username },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '7d' }
     );
 
     res.cookie('token', token, getCookieOptions());
