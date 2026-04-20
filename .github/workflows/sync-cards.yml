@@ -1,0 +1,22 @@
+name: Sync MTG cards from Scryfall
+
+on:
+  schedule:
+    # Daily at 12:00 UTC — Scryfall refreshes bulk data ~09:00 UTC
+    - cron: '0 12 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run db:cards:sync
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}

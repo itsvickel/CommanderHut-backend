@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 const cardSchema = new mongoose.Schema({
+  scryfallId: { type: String, required: true, unique: true, index: true },
   name: { type: String, required: true },
   mana_cost: String,
   type_line: String,
