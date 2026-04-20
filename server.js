@@ -46,6 +46,15 @@ app.use((err, req, res, next) => {
 // Connect to MongoDB and start server
 const PORT = process.env.PORT || 3000;
 
+// Fail fast if critical env vars are missing
+const REQUIRED_ENV = ['JWT_SECRET', 'MONGODB_URI'];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`Missing required env var: ${key}`);
+    process.exit(1);
+  }
+}
+
 (async () => {
   try {
     await connectDB();
