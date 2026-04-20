@@ -31,8 +31,12 @@ app.use(helmet());
 app.use(globalLimiter);
 
 // Middleware: body parsing
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+// NOTE: For routes that need larger payloads (e.g., avatar upload),
+// mount a route-scoped body parser on that specific route, e.g.:
+//   router.post('/avatar', express.json({ limit: '5mb' }), avatarHandler);
+// Do NOT raise the global limit.
+app.use(express.json({ limit: '200kb' }));
+app.use(express.urlencoded({ extended: true, limit: '200kb' }));
 
 // Middleware: cookies
 app.use(cookieParser());
