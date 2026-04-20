@@ -100,20 +100,14 @@ export async function updateProfile(req, res) {
   }
 }
 
-export async function getAllProfile(req, res){
-    try{
-        const profiles = await Profile.find();
-
-        if(profiles){
-            return res.status(200).json({ profiles })
-        }
-        else{
-            res.status(404).json({ error: 'Failed to find all Profile' })
-        }
-    }
-    catch{
-        res.status(500).json({ error: ' Failed to get all profiles' });
-    }
+export async function getAllProfile(req, res) {
+  try {
+    const profiles = await Profile.find().limit(50);
+    return res.status(200).json({ profiles });
+  } catch (err) {
+    console.error('getAllProfile error:', err);
+    return res.status(500).json({ error: 'Failed to get all profiles' });
+  }
 }
 
 export async function findProfile(req, res) {

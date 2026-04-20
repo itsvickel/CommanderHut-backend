@@ -9,7 +9,7 @@ import {
 
 const router = express.Router();
 
-router.get('/profile', getAllProfile);
+router.get('/profile', authenticateToken, getAllProfile);
 router.get('/profile/:id', findProfile);
 
 router.post('/profile', authenticateToken, addProfile);
