@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { globalLimiter } from './middleware/rateLimiters.js';
 import 'dotenv/config';
 
 // Fail fast if critical env vars are missing
@@ -27,6 +28,7 @@ import profileRoute from './routes/profileRoutes.js';
 const app = express();
 
 app.use(helmet());
+app.use(globalLimiter);
 
 // Middleware: body parsing
 app.use(express.json({ limit: '20mb' }));
