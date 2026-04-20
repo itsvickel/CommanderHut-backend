@@ -28,6 +28,11 @@ app.use(cors({
   credentials: true,
 }));
 
+// Health check (used by Railway / uptime monitors)
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({ ok: true, uptime: process.uptime() });
+});
+
 // Routes
 app.use('/api', cardRoutes);
 app.use('/api', userRoutes);
