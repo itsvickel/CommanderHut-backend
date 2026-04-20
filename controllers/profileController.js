@@ -2,43 +2,40 @@ import { mongoose } from 'mongoose';
 import Profile from '../models/Profile.js';
 import User from '../models/User.js';
 
-export async function addProfile(req, res){
+export async function addProfile(req, res) {
+  try {
+    const userId = req.user.id;
 
-    try{
-        const { user_id } = req.body;
-
-        // Validate inputs
-        if(!user_id) {
-            return res.status(400).json({ error: "Missing user_id" });
-        }
-
-        const user = await User.findById(user_id);
-        if(!user){
-            return res.status(404).json({ error: "User not found" });
-        }
- 
-        const newProfile = await Profile.create({
-            avatar_url: null,
-            bio: "Write a nice bio here :) ...",
-            website: null,
-        
-            user: user ? user._id : null,
-            decks: [],
-            followers: [],
-            following: [],
-            likes: [],
-
-            last_active_at:  Date.now() ,
-        })
-
-        res.status(200).json({
-            message: "Profile created with success",
-            profile: newProfile
-        })
+    const existing = await Profile.findOne({ user: userId });
+    if (existing) {
+      return res.status(409).json({ error: 'Profile already exists for this user' });
     }
-    catch{
-        res.status(400).json({error: "Error: Could not create a profile"});
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
+
+    const newProfile = await Profile.create({
+      avatar_url: null,
+      bio: 'Write a nice bio here :) ...',
+      website: null,
+      user: user._id,
+      decks: [],
+      followers: [],
+      following: [],
+      likes: [],
+      last_active_at: Date.now(),
+    });
+
+    return res.status(201).json({
+      message: 'Profile created with success',
+      profile: newProfile,
+    });
+  } catch (err) {
+    console.error('addProfile error:', err);
+    return res.status(500).json({ error: 'Could not create a profile' });
+  }
 }
 
 export async function updateProfile(req,res){
