@@ -116,17 +116,24 @@ export async function getAllProfile(req, res){
     }
 }
 
-export async function findProfile(req, res){
-    try{
-        const { id } = req.params;
-    
-        const profile = await Profile.findOne({user: id});
-    
-        if(!profile) return res.status(404).json({ error: 'Profile not found' });
-        res.status(200).json({ profile });
-    
+export async function findProfile(req, res) {
+  try {
+    const { id } = req.params;
+
+    const profile = await Profile.findOne({ user: id })
+      .populate({
+        path: 'decks',
+        select: 'deck_name format commander commander_image tags is_public created_at',
+      })
+      .lean();
+
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
     }
-    catch{
-        res.status(500).json({ error: 'Failed to retrieve user' });
-    }
+
+    return res.status(200).json({ profile });
+  } catch (err) {
+    console.error('findProfile error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve profile' });
+  }
 }
