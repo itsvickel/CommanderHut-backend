@@ -43,10 +43,11 @@ export async function addUser(req, res) {
 export async function findUser(req, res) {
   try {
     const { id } = req.params;
-    const user = await User.findById(id);
+    const user = await User.findById(id).select('-password');
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.status(200).json({ user });
+    return res.status(200).json({ user });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve user' });
+    console.error('findUser error:', error);
+    return res.status(500).json({ error: 'Failed to retrieve user' });
   }
 }
