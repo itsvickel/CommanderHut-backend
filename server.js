@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import 'dotenv/config';
 
 // Fail fast if critical env vars are missing
@@ -24,6 +25,8 @@ import aiRoutes from './routes/aiRoutes.js';
 import profileRoute from './routes/profileRoutes.js';
 
 const app = express();
+
+app.use(helmet());
 
 // Middleware: body parsing
 app.use(express.json({ limit: '20mb' }));
