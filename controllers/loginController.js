@@ -2,41 +2,40 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import User from '../models/User.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+function getCookieOptions() {
+  const isProd = process.env.NODE_ENV === 'production';
+  return {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    maxAge: 3600 * 1000,
+    path: '/',
+  };
+}
 
-// Login user
 export const loginUser = async (req, res) => {
   try {
     const { email_address, password } = req.body;
 
-    // Find the user by email (Mongoose version)
     const user = await User.findOne({ email_address });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Validate password
     const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Generate JWT token
     const token = jwt.sign(
       { id: user._id, email_address: user.email_address, username: user.username },
-      JWT_SECRET,
+      process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
-    // Set cookie
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'development',
-      sameSite: 'Strict',
-      maxAge: 3600 * 1000,
-    });
+    res.cookie('token', token, getCookieOptions());
 
     return res.status(200).json({
       message: 'Login successful',
@@ -52,14 +51,8 @@ export const loginUser = async (req, res) => {
   }
 };
 
-// Logout user
 export const logoutUser = (req, res) => {
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'development',
-    sameSite: 'Strict',
-    path: '/',
-  });
-
+  const { maxAge: _omit, ...clearOptions } = getCookieOptions();
+  res.clearCookie('token', clearOptions);
   return res.status(200).json({ message: 'Logged out successfully' });
 };
