@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import 'dotenv/config';
 import connectDB from './config/db.js';  // MongoDB connection function
 
@@ -17,6 +18,9 @@ const app = express();
 // Middleware: body parsing
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+// Middleware: cookies
+app.use(cookieParser());
 
 // Middleware: CORS
 app.use(cors({
