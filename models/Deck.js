@@ -22,6 +22,14 @@ const deckSchema = new mongoose.Schema({
   cards: [deckCardSubSchema], // Embedded cards array
 
   likes_count: { type: Number, default: 0 },
+  source: { type: String, enum: ['manual', 'ai'], default: 'manual' },
+  ai_metadata: {
+    prompt: String,
+    power_bracket: Number,
+    budget_usd: Number,
+    model: String,
+    generated_at: Date,
+  },
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
 });
