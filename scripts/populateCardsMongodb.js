@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import axios from 'axios';
 import mongoose from 'mongoose';
 import Card from '../models/Card.js';
