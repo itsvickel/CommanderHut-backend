@@ -55,29 +55,34 @@ export async function save(req, res) {
     return res.status(403).json({ error: 'not your generation' });
   }
 
-  const deck = await Deck.create({
-    deck_name,
-    format: 'Commander',
-    commander: preview.commander.name,
-    commander_image: preview.commander.image_uris?.normal ?? null,
-    owner: req.user.id,
-    owner_email: req.user.email_address,
-    tags: Array.isArray(tags) ? tags : [],
-    is_public: !!is_public,
-    source: 'ai',
-    ai_metadata: {
-      prompt: preview.prompt,
-      power_bracket: preview.power_bracket,
-      budget_usd: preview.budget_usd,
-      model: preview.model,
-      generated_at: preview.generated_at,
-    },
-    cards: preview.cards.map(e => ({
-      card: e.card._id,
-      quantity: e.quantity,
-    })),
-  });
+  try {
+    const deck = await Deck.create({
+      deck_name: String(deck_name).trim().slice(0, 200),
+      format: 'Commander',
+      commander: preview.commander.name,
+      commander_image: preview.commander.image_uris?.normal ?? null,
+      owner: req.user.id,
+      owner_email: req.user.email_address,
+      tags: Array.isArray(tags) ? tags.filter(t => typeof t === 'string').map(t => t.trim().slice(0, 50)) : [],
+      is_public: !!is_public,
+      source: 'ai',
+      ai_metadata: {
+        prompt: preview.prompt,
+        power_bracket: preview.power_bracket,
+        budget_usd: preview.budget_usd,
+        model: preview.model,
+        generated_at: preview.generated_at,
+      },
+      cards: preview.cards.map(e => ({
+        card: e.card._id,
+        quantity: e.quantity,
+      })),
+    });
 
-  deletePreview(generation_id);
-  return res.status(201).json({ deck });
+    deletePreview(generation_id);
+    return res.status(201).json({ deck });
+  } catch (err) {
+    console.error('deck save failed:', err);
+    return res.status(500).json({ error: 'Failed to save deck' });
+  }
 }

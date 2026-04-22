@@ -11,13 +11,8 @@ export async function dailyCap(req, res, next) {
   if (!user) return res.status(401).json({ error: 'auth required' });
 
   const date = todayUtc();
-  const usage = await AIUsage.findOneAndUpdate(
-    { user, date },
-    { $inc: { count: 1 } },
-    { upsert: true, new: true }
-  );
-
-  if (usage.count > DAILY_LIMIT) {
+  const existing = await AIUsage.findOne({ user, date });
+  if (existing && existing.count >= DAILY_LIMIT) {
     const retryAfter = Math.ceil(
       (Date.UTC(
         new Date().getUTCFullYear(),
@@ -28,6 +23,12 @@ export async function dailyCap(req, res, next) {
     res.set('Retry-After', retryAfter);
     return res.status(429).json({ error: 'daily generation cap reached', retry_after_seconds: retryAfter });
   }
+
+  await AIUsage.findOneAndUpdate(
+    { user, date },
+    { $inc: { count: 1 } },
+    { upsert: true }
+  );
 
   next();
 }

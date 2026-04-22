@@ -58,7 +58,10 @@ export const cardRepo = {
       ...identityFilter(colorIdentity),
       ...notInExcluded(excludeIds),
       ...priceUnder(maxPrice),
-      type_line: { $regex: LAND_TYPE_RE, $not: BASIC_LAND_TYPE_RE },
+      $and: [
+        { type_line: { $regex: LAND_TYPE_RE } },
+        { type_line: { $not: BASIC_LAND_TYPE_RE } },
+      ],
     }).sort({ 'prices.usd': 1 }).limit(limit).lean();
   },
 

@@ -30,7 +30,7 @@ function systemPrompt({ budget_usd, power_bracket }) {
   const bracketNote = {
     1: 'Ultra-casual: no Game Changers, no fast mana, no tutors.',
     2: 'Precon-level core: limited tutors, no Game Changers.',
-    3: 'Upgraded precons: up to 3 Game Changers permitted; avoid mass land destruction.',
+    3: 'Upgraded precons: no Game Changers; avoid mass land destruction.',
     4: 'Optimized, non-cEDH. All Game Changers allowed.',
     5: 'Competitive EDH. Anything format-legal.',
   }[power_bracket] ?? '';
