@@ -59,13 +59,13 @@ describe('buildSystemPrompt', () => {
   it('falls back to defaults when DB returns null', async () => {
     MasterPrompt.findOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
     const result = await buildSystemPrompt({ budget_usd: null, power_bracket: 1 });
-    expect(result).toContain('Commander deck-building expert');
+    expect(result).toContain('Magic: The Gathering Commander deck-building assistant');
   });
 
   it('falls back to defaults when DB throws', async () => {
     MasterPrompt.findOne.mockReturnValue({ lean: vi.fn().mockRejectedValue(new Error('DB down')) });
     const result = await buildSystemPrompt({ budget_usd: null, power_bracket: 1 });
-    expect(result).toContain('Commander deck-building expert');
+    expect(result).toContain('Magic: The Gathering Commander deck-building assistant');
   });
 
   it('includes budget note when budget_usd is provided', async () => {
