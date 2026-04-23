@@ -1,29 +1,27 @@
 import mongoose from 'mongoose';
 import Deck from '../models/Deck.js';
-import Card from '../models/Card.js'; // Ensure this points to your Card model
+import Card from '../models/Card.js';
+
 export const createDeckWithCards = async (req, res) => {
-  let { owner, deck_name, format, commander, commander_image, deck_list, tags, is_public } = req.body;
-
-  if ((!owner || owner === 'anonymous') && deck_name && deck_list && Array.isArray(deck_list)) {
-    // For anonymous decks, set owner to null before saving
-    owner = null;
+  const { deck_name, format, commander, commander_image, deck_list, tags, is_public } = req.body;
+  if (!req.user?.id) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
+  const owner = req.user.id;
 
-  if (owner && owner !== 'anonymous' && !mongoose.Types.ObjectId.isValid(owner)) {
-    return res.status(400).json({ error: 'Invalid owner ID' });
+  if (!deck_list || !Array.isArray(deck_list)) {
+    return res.status(400).json({ error: 'deck_list must be an array' });
   }
 
   if (!['Commander', 'Standard', 'Modern'].includes(format)) {
     return res.status(400).json({ error: 'Invalid format value' });
   }
 
-  // Step 1: Extract all unique card names from deck_list
   const uniqueCardNames = [
     ...new Set(deck_list.map((entry) => entry.card?.trim()).filter(Boolean))
   ];
 
   try {
-    // Step 2: Lookup all names in one bulk query (case-insensitive)
     const foundCards = await Card.find({
       name: { $in: uniqueCardNames.map(name => new RegExp(`^${name}$`, 'i')) }
     }).lean();
@@ -35,7 +33,6 @@ export const createDeckWithCards = async (req, res) => {
     const notFoundNames = [];
     const validDeckList = [];
 
-    // Step 3: Build the validated deck list
     for (const [index, { card: cardName, quantity }] of deck_list.entries()) {
       if (typeof cardName !== 'string' || typeof quantity !== 'number' || quantity < 1) {
         return res.status(400).json({
@@ -47,14 +44,10 @@ export const createDeckWithCards = async (req, res) => {
       if (!matchedCard) {
         notFoundNames.push(cardName);
       } else {
-        validDeckList.push({
-          card: matchedCard._id,
-          quantity,
-        });
+        validDeckList.push({ card: matchedCard._id, quantity });
       }
     }
 
-    // Step 4: If any cards weren't found, return error
     if (notFoundNames.length > 0) {
       return res.status(400).json({
         error: 'Some cards were not found in the database.',
@@ -62,13 +55,12 @@ export const createDeckWithCards = async (req, res) => {
       });
     }
 
-    // Step 5: Create the deck, include commander_image
     const newDeck = await Deck.create({
       owner,
       deck_name,
       format,
       commander,
-      commander_image,   // <-- new field added here
+      commander_image,
       cards: validDeckList,
       tags: tags || [],
       is_public: !!is_public,
@@ -81,12 +73,35 @@ export const createDeckWithCards = async (req, res) => {
   }
 };
 
-
+export const deleteDeck = async (req, res) => {
+  const { id } = req.params;
+  if (!req.user?.id) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'Invalid deck ID' });
+  }
+  try {
+    const deck = await Deck.findById(id);
+    if (!deck) return res.status(404).json({ error: 'Deck not found' });
+    if (deck.owner.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    await Deck.findByIdAndDelete(id);
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting deck:', error);
+    return res.status(500).json({ error: 'Failed to delete deck' });
+  }
+};
 
 export const getDecksByUser = async (req, res) => {
-  const { userId } = req.params;
+  const { user_id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(user_id)) {
+    return res.status(400).json({ error: 'Invalid user ID' });
+  }
   try {
-    const decks = await Deck.find({ user_id: userId });
+    const decks = await Deck.find({ owner: user_id });
     res.status(200).json(decks);
   } catch (error) {
     console.error('Error fetching decks by user:', error);
@@ -94,10 +109,16 @@ export const getDecksByUser = async (req, res) => {
   }
 };
 
-export const getDecks = async (_, res) => {
+export const getDecks = async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+  const skip = (page - 1) * limit;
   try {
-    const decks = await Deck.find();
-    res.status(200).json(decks);
+    const [decks, total] = await Promise.all([
+      Deck.find({ is_public: true }).skip(skip).limit(limit),
+      Deck.countDocuments({ is_public: true }),
+    ]);
+    res.status(200).json({ decks, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('Error fetching decks:', error);
     res.status(500).json({ error: 'Failed to fetch decks' });

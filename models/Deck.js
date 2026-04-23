@@ -13,10 +13,8 @@ const deckSchema = new mongoose.Schema({
   owner: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: false,
-    default: null,
+    required: true,
   },
-  owner_email: { type: String },
   tags: { type: [String], default: [] },
   is_public: { type: Boolean, default: false },
   cards: [deckCardSubSchema], // Embedded cards array
