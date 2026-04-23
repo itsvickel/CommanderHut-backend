@@ -72,6 +72,25 @@ export const createDeckWithCards = async (req, res) => {
   }
 };
 
+export const deleteDeck = async (req, res) => {
+  const { id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ error: 'Invalid deck ID' });
+  }
+  try {
+    const deck = await Deck.findById(id);
+    if (!deck) return res.status(404).json({ error: 'Deck not found' });
+    if (deck.owner.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    await Deck.findByIdAndDelete(id);
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting deck:', error);
+    return res.status(500).json({ error: 'Failed to delete deck' });
+  }
+};
+
 
 
 export const getDecksByUser = async (req, res) => {

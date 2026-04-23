@@ -20,6 +20,7 @@ import Deck from '../../models/Deck.js';
 import Card from '../../models/Card.js';
 import {
   createDeckWithCards,
+  deleteDeck,
 } from '../../controllers/deckController.js';
 
 function makeRes() {
@@ -99,5 +100,51 @@ describe('createDeckWithCards', () => {
     await createDeckWithCards(req, res);
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ error: 'Unauthorized' });
+  });
+});
+
+// ─── deleteDeck ───────────────────────────────────────────────────────
+
+describe('deleteDeck', () => {
+  it('returns 400 for invalid ObjectId', async () => {
+    const req = { params: { id: 'not-an-id' }, user: { id: 'user1' } };
+    const res = makeRes();
+    await deleteDeck(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid deck ID' });
+  });
+
+  it('returns 404 when deck not found', async () => {
+    Deck.findById.mockResolvedValue(null);
+    const req = { params: { id: '507f1f77bcf86cd799439011' }, user: { id: 'user1' } };
+    const res = makeRes();
+    await deleteDeck(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('returns 403 when caller is not the owner', async () => {
+    Deck.findById.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439011',
+      owner: { toString: () => 'other-user' },
+    });
+    const req = { params: { id: '507f1f77bcf86cd799439011' }, user: { id: 'user1' } };
+    const res = makeRes();
+    await deleteDeck(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Forbidden' });
+  });
+
+  it('returns 204 when owner deletes their deck', async () => {
+    Deck.findById.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439011',
+      owner: { toString: () => 'user1' },
+    });
+    Deck.findByIdAndDelete.mockResolvedValue({});
+    const req = { params: { id: '507f1f77bcf86cd799439011' }, user: { id: 'user1' } };
+    const res = makeRes();
+    await deleteDeck(req, res);
+    expect(Deck.findByIdAndDelete).toHaveBeenCalledWith('507f1f77bcf86cd799439011');
+    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.send).toHaveBeenCalled();
   });
 });
