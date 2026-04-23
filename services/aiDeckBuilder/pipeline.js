@@ -26,7 +26,6 @@ export function deletePreview(id) { previewCache.delete(id); }
 export async function generateDeck({ userId, prompt, budget_usd, power_bracket, cardRepo = defaultRepo }) {
   // 1. LLM call
   const { raw, model } = await callGemini({ prompt, budget_usd, power_bracket });
-  console.log('[pipeline] raw LLM response:', raw);
   const parsed = parseGeminiResponse(raw);
 
   // 2. Commander
