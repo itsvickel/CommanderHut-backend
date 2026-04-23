@@ -54,5 +54,16 @@ describe('adminMiddleware', () => {
     await adminMiddleware(req, res, next);
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to verify admin status' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when req.user is missing', async () => {
+    const req = {};
+    const res = makeRes();
+    const next = vi.fn();
+    await adminMiddleware(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Authentication required' });
+    expect(next).not.toHaveBeenCalled();
   });
 });
