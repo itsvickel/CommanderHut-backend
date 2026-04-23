@@ -8,6 +8,7 @@ const BULK_INDEX_URL = 'https://api.scryfall.com/bulk-data';
 const BATCH_SIZE = 1000;
 
 function toCardDoc(card) {
+  const parsePrice = v => (v == null ? null : parseFloat(v));
   return {
     scryfallId: card.id,
     name: card.name,
@@ -23,6 +24,10 @@ function toCardDoc(card) {
     image_uris: card.image_uris || null,
     legalities: card.legalities || null,
     layout: card.layout || null,
+    prices: {
+      usd: parsePrice(card.prices?.usd),
+      usd_foil: parsePrice(card.prices?.usd_foil),
+    },
   };
 }
 
