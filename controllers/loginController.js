@@ -17,6 +17,13 @@ export const loginUser = async (req, res) => {
   try {
     const { email_address, password } = req.body;
 
+    if (
+      typeof email_address !== 'string' || !email_address.trim() ||
+      typeof password !== 'string' || !password
+    ) {
+      return res.status(400).json({ error: 'email_address and password are required' });
+    }
+
     const user = await User.findOne({ email_address });
     const isValidPassword = user
       ? await bcrypt.compare(password, user.password)
