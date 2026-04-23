@@ -47,6 +47,7 @@ export const loginUser = async (req, res) => {
         id: user._id,
         username: user.username,
         email_address: user.email_address,
+        is_admin: user.is_admin ?? false,
       },
     });
   } catch (error) {
