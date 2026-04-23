@@ -147,4 +147,12 @@ describe('deleteDeck', () => {
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.send).toHaveBeenCalled();
   });
+
+  it('returns 401 when req.user is missing', async () => {
+    const req = { params: { id: '507f1f77bcf86cd799439011' }, user: undefined };
+    const res = makeRes();
+    await deleteDeck(req, res);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Unauthorized' });
+  });
 });

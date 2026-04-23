@@ -74,6 +74,9 @@ export const createDeckWithCards = async (req, res) => {
 
 export const deleteDeck = async (req, res) => {
   const { id } = req.params;
+  if (!req.user?.id) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ error: 'Invalid deck ID' });
   }
@@ -90,8 +93,6 @@ export const deleteDeck = async (req, res) => {
     return res.status(500).json({ error: 'Failed to delete deck' });
   }
 };
-
-
 
 export const getDecksByUser = async (req, res) => {
   const { userId } = req.params;
