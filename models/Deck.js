@@ -11,7 +11,7 @@ const deckSchema = new mongoose.Schema({
   commander: { type: String },
   commander_image: { type: String },  // <-- new field for commander image URL
   owner: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,
     ref: 'User',
     required: true,
   },
