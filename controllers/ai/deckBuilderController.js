@@ -5,7 +5,7 @@ function validateGenerateBody(body) {
   const errors = [];
   if (body.format !== 'Commander') errors.push('format must be "Commander"');
   if (typeof body.prompt !== 'string' || !body.prompt.trim()) errors.push('prompt required');
-  if (body.prompt && body.prompt.length > 500) errors.push('prompt max 500 chars');
+  if (body.prompt && body.prompt.length > 2000) errors.push('prompt max 2000 chars');
   if (body.budget_usd != null) {
     if (!Number.isInteger(body.budget_usd) || body.budget_usd < 20 || body.budget_usd > 10000) {
       errors.push('budget_usd must be 20-10000');
@@ -62,7 +62,6 @@ export async function save(req, res) {
       commander: preview.commander.name,
       commander_image: preview.commander.image_uris?.normal ?? null,
       owner: req.user.id,
-      owner_email: req.user.email_address,
       tags: Array.isArray(tags) ? tags.filter(t => typeof t === 'string').map(t => t.trim().slice(0, 50)) : [],
       is_public: !!is_public,
       source: 'ai',

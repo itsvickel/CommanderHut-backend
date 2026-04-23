@@ -1,6 +1,10 @@
 import Card from '../../models/Card.js';
 
 const LAND_TYPE_RE = /\bLand\b/;
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 const BASIC_LAND_TYPE_RE = /Basic\s+Land/;
 
 function commanderLegal() {
@@ -35,7 +39,7 @@ export const cardRepo = {
       type_line: { $regex: /Legendary Creature/ },
       ...commanderLegal(),
       ...(commanderNameContains
-        ? { name: { $regex: commanderNameContains, $options: 'i' } }
+        ? { name: { $regex: escapeRegex(commanderNameContains), $options: 'i' } }
         : {}),
     }).limit(50).lean();
   },

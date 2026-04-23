@@ -23,7 +23,7 @@ export const createDeckWithCards = async (req, res) => {
 
   try {
     const foundCards = await Card.find({
-      name: { $in: uniqueCardNames.map(name => new RegExp(`^${name}$`, 'i')) }
+      name: { $in: uniqueCardNames.map(name => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')) }
     }).lean();
 
     const nameToCardMap = new Map(

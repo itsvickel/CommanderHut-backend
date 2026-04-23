@@ -1,8 +1,16 @@
 const VALID_COLORS = new Set(['W', 'U', 'B', 'R', 'G']);
 const VALID_ROLES = new Set(['win_con', 'ramp', 'draw', 'removal', 'interaction', 'synergy', 'utility']);
 
+function stripMd(str) {
+  return str.replace(/\*+/g, '').trim();
+}
+
 export function parseGeminiResponse(input) {
-  const obj = typeof input === 'string' ? JSON.parse(input) : input;
+  // Strip markdown code fences that some LLMs add despite being told not to
+  const cleaned = typeof input === 'string'
+    ? input.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+    : input;
+  const obj = typeof cleaned === 'string' ? JSON.parse(cleaned) : cleaned;
   if (!obj || typeof obj !== 'object') throw new Error('response is not an object');
 
   if (typeof obj.commander !== 'string' || !obj.commander.trim()) {
@@ -23,9 +31,9 @@ export function parseGeminiResponse(input) {
   );
 
   return {
-    commander: obj.commander.trim(),
+    commander: stripMd(obj.commander),
     color_identity: obj.color_identity,
-    strategy: obj.strategy.trim(),
-    signature_cards,
+    strategy: stripMd(obj.strategy),
+    signature_cards: signature_cards.map(s => ({ ...s, name: stripMd(s.name) })),
   };
 }
