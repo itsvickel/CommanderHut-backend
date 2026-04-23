@@ -61,6 +61,12 @@ app.use('/api', authRoutes);
 app.use('/api', aiRoutes);
 app.use('/api', profileRoute);
 
+// 404 handler — logs unmatched routes to help diagnose frontend URL mismatches
+app.use((req, res) => {
+  console.warn(`404 Not Found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ error: `Route not found: ${req.method} ${req.originalUrl}` });
+});
+
 // Optional: catch-all error handler middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
