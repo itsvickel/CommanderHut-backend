@@ -99,6 +99,11 @@ describe('buildFilter', () => {
     expect(f).toEqual({ $and: [{ 'legalities.commander': 'legal' }] });
   });
 
+  it('ignores unknown legal format', () => {
+    const f = buildFilter({ legal: 'not-a-format' });
+    expect(f).toEqual({});
+  });
+
   it('combines multiple clauses with $and', () => {
     const f = buildFilter({ name: 'lightning bolt', legal: 'commander' });
     expect(f.$and).toHaveLength(2);

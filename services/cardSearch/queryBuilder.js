@@ -1,3 +1,9 @@
+const LEGAL_FORMATS = new Set([
+  'standard', 'pioneer', 'modern', 'legacy', 'vintage',
+  'commander', 'pauper', 'brawl', 'historicbrawl', 'alchemy',
+  'explorer', 'timeless', 'penny', 'oathbreaker',
+]);
+
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -39,6 +45,8 @@ export function buildFilter({ name, text, type, colors, color_identity, cmc_min,
   if (colors?.length) {
     clauses.push({ colors: { $all: colors } });
   }
+  // color_identity filter: cards must only contain colors from the allowed set
+  // (queries `colors` field — Card schema does not have a separate color_identity field)
   if (color_identity?.length) {
     clauses.push({ colors: { $not: { $elemMatch: { $nin: color_identity } } } });
   }
@@ -51,7 +59,7 @@ export function buildFilter({ name, text, type, colors, color_identity, cmc_min,
   if (price_max != null) {
     clauses.push({ $or: [{ 'prices.usd': { $lte: price_max } }, { 'prices.usd': null }] });
   }
-  if (legal != null) {
+  if (legal != null && LEGAL_FORMATS.has(legal)) {
     clauses.push({ [`legalities.${legal}`]: 'legal' });
   }
 
