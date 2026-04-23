@@ -85,4 +85,19 @@ describe('createDeckWithCards', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'deck_list must be an array' });
   });
+
+  it('returns 401 when req.user is missing', async () => {
+    const req = {
+      user: undefined,
+      body: {
+        deck_name: 'Test',
+        format: 'Commander',
+        deck_list: [{ card: 'Sol Ring', quantity: 1 }],
+      },
+    };
+    const res = makeRes();
+    await createDeckWithCards(req, res);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Unauthorized' });
+  });
 });

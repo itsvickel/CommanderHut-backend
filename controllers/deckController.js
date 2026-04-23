@@ -1,8 +1,11 @@
 import mongoose from 'mongoose';
 import Deck from '../models/Deck.js';
-import Card from '../models/Card.js'; // Ensure this points to your Card model
+import Card from '../models/Card.js';
 export const createDeckWithCards = async (req, res) => {
   const { deck_name, format, commander, commander_image, deck_list, tags, is_public } = req.body;
+  if (!req.user?.id) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   const owner = req.user.id;
 
   if (!deck_list || !Array.isArray(deck_list)) {
