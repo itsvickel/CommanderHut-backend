@@ -57,6 +57,7 @@ export function buildFilter({ name, text, type, colors, color_identity, cmc_min,
     clauses.push({ cmc: cmcClause });
   }
   if (price_max != null) {
+    // cards with no price data are included — they may simply not have a market price listed
     clauses.push({ $or: [{ 'prices.usd': { $lte: price_max } }, { 'prices.usd': null }] });
   }
   if (legal != null && LEGAL_FORMATS.has(legal)) {
