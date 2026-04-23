@@ -21,6 +21,8 @@ export async function getMasterprompt(req, res) {
 }
 
 export async function updateMasterprompt(req, res) {
+  if (!req.user?.id) return res.status(401).json({ error: 'Authentication required' });
+
   const { role_description, domain_restrictions, additional_rules } = req.body ?? {};
 
   if (role_description != null && typeof role_description !== 'string') {
@@ -32,13 +34,26 @@ export async function updateMasterprompt(req, res) {
   if (additional_rules != null && typeof additional_rules !== 'string') {
     return res.status(400).json({ error: 'additional_rules must be a string' });
   }
+  if (role_description != null && role_description.trim().length === 0) {
+    return res.status(400).json({ error: 'role_description must not be empty' });
+  }
+  if (domain_restrictions != null && domain_restrictions.trim().length === 0) {
+    return res.status(400).json({ error: 'domain_restrictions must not be empty' });
+  }
 
   const update = { updated_by: req.user.id };
-  if (role_description != null) update.role_description = role_description;
-  if (domain_restrictions != null) update.domain_restrictions = domain_restrictions;
+  if (role_description != null) update.role_description = role_description.trim();
+  if (domain_restrictions != null) update.domain_restrictions = domain_restrictions.trim();
   if (additional_rules != null) update.additional_rules = additional_rules;
 
   try {
+    const existing = await MasterPrompt.findOne().lean();
+    if (!existing && (update.role_description == null || update.domain_restrictions == null)) {
+      return res.status(400).json({
+        error: 'role_description and domain_restrictions are required for initial setup',
+      });
+    }
+
     const doc = await MasterPrompt.findOneAndUpdate(
       {},
       { $set: update },

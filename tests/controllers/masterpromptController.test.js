@@ -75,6 +75,7 @@ describe('getMasterprompt', () => {
 
 describe('updateMasterprompt', () => {
   it('updates and returns doc with output_format', async () => {
+    MasterPrompt.findOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(docFixture) });
     MasterPrompt.findOneAndUpdate.mockResolvedValue(docFixture);
     const req = {
       user: { id: 'uuid-abc' },
@@ -82,7 +83,11 @@ describe('updateMasterprompt', () => {
     };
     const res = makeRes();
     await updateMasterprompt(req, res);
-    expect(MasterPrompt.findOneAndUpdate).toHaveBeenCalled();
+    expect(MasterPrompt.findOneAndUpdate).toHaveBeenCalledWith(
+      {},
+      { $set: expect.objectContaining({ role_description: 'New role', updated_by: 'uuid-abc' }) },
+      expect.objectContaining({ upsert: true, new: true })
+    );
     expect(invalidatePromptCache).toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       ...docFixture,
@@ -96,6 +101,7 @@ describe('updateMasterprompt', () => {
     await updateMasterprompt(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'role_description must be a string' });
+    expect(invalidatePromptCache).not.toHaveBeenCalled();
   });
 
   it('returns 400 when domain_restrictions is not a string', async () => {
@@ -104,6 +110,7 @@ describe('updateMasterprompt', () => {
     await updateMasterprompt(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'domain_restrictions must be a string' });
+    expect(invalidatePromptCache).not.toHaveBeenCalled();
   });
 
   it('returns 400 when additional_rules is not a string', async () => {
@@ -112,9 +119,11 @@ describe('updateMasterprompt', () => {
     await updateMasterprompt(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'additional_rules must be a string' });
+    expect(invalidatePromptCache).not.toHaveBeenCalled();
   });
 
   it('returns 500 when DB throws', async () => {
+    MasterPrompt.findOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(docFixture) });
     MasterPrompt.findOneAndUpdate.mockRejectedValue(new Error('DB error'));
     const req = {
       user: { id: 'uuid' },
@@ -124,5 +133,26 @@ describe('updateMasterprompt', () => {
     await updateMasterprompt(req, res);
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Failed to update masterprompt' });
+  });
+
+  it('returns 400 when role_description is an empty string', async () => {
+    const req = { user: { id: 'uuid' }, body: { role_description: '   ' } };
+    const res = makeRes();
+    await updateMasterprompt(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'role_description must not be empty' });
+    expect(invalidatePromptCache).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when first-time write is missing required fields', async () => {
+    MasterPrompt.findOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
+    const req = { user: { id: 'uuid' }, body: { additional_rules: 'Some rule' } };
+    const res = makeRes();
+    await updateMasterprompt(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'role_description and domain_restrictions are required for initial setup',
+    });
+    expect(invalidatePromptCache).not.toHaveBeenCalled();
   });
 });
