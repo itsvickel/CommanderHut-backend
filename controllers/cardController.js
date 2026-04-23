@@ -123,6 +123,10 @@ export const postBulkLookupByName = async (req, res) => {
 export const searchCards = async (req, res) => {
   const { q = '', colors, color_identity, legal } = req.query;
 
+  if (q.length > 200) {
+    return res.status(400).json({ error: 'q must be 200 characters or fewer' });
+  }
+
   let page = parseInt(req.query.page ?? '1', 10);
   let limit = parseInt(req.query.limit ?? '20', 10);
 
@@ -152,21 +156,21 @@ export const searchCards = async (req, res) => {
   page = Math.max(page, 1);
   const skip = (page - 1) * limit;
 
-  const keywords = parseQ(q);
-  const colorsArr = colors ? colors.toUpperCase().split('') : undefined;
-  const colorIdentityArr = color_identity ? color_identity.toUpperCase().split('') : undefined;
-
-  const filter = buildFilter({
-    ...keywords,
-    colors: colorsArr,
-    color_identity: colorIdentityArr,
-    cmc_min,
-    cmc_max,
-    price_max,
-    legal,
-  });
-
   try {
+    const keywords = parseQ(q);
+    const colorsArr = colors ? colors.toUpperCase().split('') : undefined;
+    const colorIdentityArr = color_identity ? color_identity.toUpperCase().split('') : undefined;
+
+    const filter = buildFilter({
+      ...keywords,
+      colors: colorsArr,
+      color_identity: colorIdentityArr,
+      cmc_min,
+      cmc_max,
+      price_max,
+      legal,
+    });
+
     const [cards, total] = await Promise.all([
       Card.find(filter).skip(skip).limit(limit).lean(),
       Card.countDocuments(filter),
@@ -176,7 +180,7 @@ export const searchCards = async (req, res) => {
       cards,
       total,
       page,
-      pages: Math.ceil(total / limit),
+      pages: total === 0 ? 1 : Math.ceil(total / limit),
       limit,
     });
   } catch (err) {

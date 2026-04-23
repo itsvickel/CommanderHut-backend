@@ -140,6 +140,21 @@ describe('searchCards', () => {
     );
   });
 
+  it('returns pages: 1 when total is 0', async () => {
+    Card.find.mockReturnValue({
+      skip: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockReturnThis(),
+      lean: vi.fn().mockResolvedValue([]),
+    });
+    Card.countDocuments.mockResolvedValue(0);
+
+    const req = { query: {} };
+    const res = makeRes();
+    await searchCards(req, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ pages: 1 }));
+  });
+
   it('returns 500 on DB error', async () => {
     Card.find.mockReturnValue({
       skip: vi.fn().mockReturnThis(),
