@@ -3,6 +3,7 @@ import Card from './Card.js';
 import Deck from './Deck.js';
 import User from './User.js';
 import Profile from './Profile.js';
+import MasterPrompt from './MasterPrompt.js';
 
 // import DeckCard from './DeckCard.js'; // optional if used
 
@@ -12,5 +13,6 @@ export {
   Deck,
   User,
   Profile,
+  MasterPrompt,
   // DeckCard,
 };
