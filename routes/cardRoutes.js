@@ -8,16 +8,18 @@ import {
   addCard,
   getRandomListOfCards,
   getCardByID,
-  postBulkLookupByName
+  postBulkLookupByName,
+  searchCards,
 } from '../controllers/cardController.js';
 
 const router = express.Router();
 
-router.post('/cards/bulk', postCardsBulkByName ); 
-router.get('/cards/id/:id', getCardByID);  
-router.get('/cards/name/:name', getCardByName);  
-router.get('/cards/randomList', getRandomListOfCards);  
-router.get('/cards/set/:set', getCardsBySet);  
+router.post('/cards/bulk', postCardsBulkByName );
+router.get('/cards/id/:id', getCardByID);
+router.get('/cards/name/:name', getCardByName);
+router.get('/cards/randomList', getRandomListOfCards);
+router.get('/cards/set/:set', getCardsBySet);
+router.get('/cards/search', searchCards);
 router.get('/cards/:set/:collectorNumber', getCardBySetAndCollectorNumber); 
 router.get('/cards/all', getAllCards);  
 router.post('/cards', addCard);

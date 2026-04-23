@@ -24,6 +24,7 @@ function toCardDoc(card) {
     image_uris: card.image_uris || null,
     legalities: card.legalities || null,
     layout: card.layout || null,
+    cmc: card.cmc ?? null,
     prices: {
       usd: parsePrice(card.prices?.usd),
       usd_foil: parsePrice(card.prices?.usd_foil),

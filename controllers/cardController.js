@@ -1,4 +1,5 @@
 import Card from '../models/Card.js';
+import { parseQ, buildFilter } from '../services/cardSearch/queryBuilder.js';
 
 export const getAllCards = async (_, res) => {
   try {
@@ -116,5 +117,74 @@ export const postBulkLookupByName = async (req, res) => {
     res.json(cards);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch cards' });
+  }
+};
+
+export const searchCards = async (req, res) => {
+  const { q = '', colors, color_identity, legal } = req.query;
+
+  if (q.length > 200) {
+    return res.status(400).json({ error: 'q must be 200 characters or fewer' });
+  }
+
+  let page = parseInt(req.query.page ?? '1', 10);
+  let limit = parseInt(req.query.limit ?? '20', 10);
+
+  if (req.query.page !== undefined && (isNaN(page) || page < 1)) {
+    return res.status(400).json({ error: 'page must be a positive integer' });
+  }
+  if (req.query.limit !== undefined && (isNaN(limit) || limit < 1)) {
+    return res.status(400).json({ error: 'limit must be a positive integer' });
+  }
+
+  let cmc_min, cmc_max, price_max;
+
+  if (req.query.cmc_min !== undefined) {
+    cmc_min = Number(req.query.cmc_min);
+    if (isNaN(cmc_min)) return res.status(400).json({ error: 'cmc_min must be a number' });
+  }
+  if (req.query.cmc_max !== undefined) {
+    cmc_max = Number(req.query.cmc_max);
+    if (isNaN(cmc_max)) return res.status(400).json({ error: 'cmc_max must be a number' });
+  }
+  if (req.query.price_max !== undefined) {
+    price_max = Number(req.query.price_max);
+    if (isNaN(price_max)) return res.status(400).json({ error: 'price_max must be a number' });
+  }
+
+  limit = Math.min(Math.max(limit, 1), 100);
+  page = Math.max(page, 1);
+  const skip = (page - 1) * limit;
+
+  try {
+    const keywords = parseQ(q);
+    const colorsArr = colors ? colors.toUpperCase().split('') : undefined;
+    const colorIdentityArr = color_identity ? color_identity.toUpperCase().split('') : undefined;
+
+    const filter = buildFilter({
+      ...keywords,
+      colors: colorsArr,
+      color_identity: colorIdentityArr,
+      cmc_min,
+      cmc_max,
+      price_max,
+      legal,
+    });
+
+    const [cards, total] = await Promise.all([
+      Card.find(filter).skip(skip).limit(limit).lean(),
+      Card.countDocuments(filter),
+    ]);
+
+    return res.json({
+      cards,
+      total,
+      page,
+      pages: total === 0 ? 1 : Math.ceil(total / limit),
+      limit,
+    });
+  } catch (err) {
+    console.error('searchCards error:', err);
+    return res.status(500).json({ error: 'Failed to search cards' });
   }
 };
