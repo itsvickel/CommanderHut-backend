@@ -62,7 +62,6 @@ export async function save(req, res) {
       commander: preview.commander.name,
       commander_image: preview.commander.image_uris?.normal ?? null,
       owner: req.user.id,
-      owner_email: req.user.email_address,
       tags: Array.isArray(tags) ? tags.filter(t => typeof t === 'string').map(t => t.trim().slice(0, 50)) : [],
       is_public: !!is_public,
       source: 'ai',
