@@ -1,6 +1,10 @@
 const VALID_COLORS = new Set(['W', 'U', 'B', 'R', 'G']);
 const VALID_ROLES = new Set(['win_con', 'ramp', 'draw', 'removal', 'interaction', 'synergy', 'utility']);
 
+function stripMd(str) {
+  return str.replace(/\*+/g, '').trim();
+}
+
 export function parseGeminiResponse(input) {
   // Strip markdown code fences that some LLMs add despite being told not to
   const cleaned = typeof input === 'string'
@@ -27,9 +31,9 @@ export function parseGeminiResponse(input) {
   );
 
   return {
-    commander: obj.commander.trim(),
+    commander: stripMd(obj.commander),
     color_identity: obj.color_identity,
-    strategy: obj.strategy.trim(),
-    signature_cards,
+    strategy: stripMd(obj.strategy),
+    signature_cards: signature_cards.map(s => ({ ...s, name: stripMd(s.name) })),
   };
 }

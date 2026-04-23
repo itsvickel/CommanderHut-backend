@@ -14,7 +14,7 @@ function systemPrompt({ budget_usd, power_bracket }) {
 
   return [
     'You are a Commander deck-building expert.',
-    'Output ONLY valid JSON — no markdown, no explanation, no code fences.',
+    'Output ONLY valid JSON — no markdown, no bold (**), no explanation, no code fences.',
     'Required JSON keys:',
     '  commander: string (exact real Magic: The Gathering card name)',
     '  color_identity: array of letters from W U B R G only',
