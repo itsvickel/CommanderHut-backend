@@ -15,6 +15,7 @@ const cardSchema = new mongoose.Schema({
   image_uris: mongoose.Schema.Types.Mixed, // Accepts any JSON
   legalities: mongoose.Schema.Types.Mixed,
   layout: String,
+  cmc: { type: Number, default: null },
   prices: {
     usd: { type: Number, default: null },
     usd_foil: { type: Number, default: null },
