@@ -7,8 +7,8 @@ import { dailyCap } from '../middleware/dailyCap.js';
 
 const router = express.Router();
 
-router.post('/deepseek', generateDeckDeepSeek);
-router.post('/gemini', generateDeckGemini);
+router.post('/deepseek', authMiddleware, dailyCap, generateDeckDeepSeek);
+router.post('/gemini', authMiddleware, dailyCap, generateDeckGemini);
 
 router.post('/ai/deck/generate', authMiddleware, dailyCap, generate);
 router.post('/ai/deck/save', authMiddleware, save);
