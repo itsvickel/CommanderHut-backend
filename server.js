@@ -97,7 +97,11 @@ const PORT = process.env.PORT || 3000;
   try {
     await connectDB();
     console.log('MongoDB connected');
-    await seedMasterPrompt();
+    try {
+      await seedMasterPrompt();
+    } catch (err) {
+      console.warn('[startup] MasterPrompt seed failed, continuing anyway:', err.message);
+    }
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
