@@ -21,6 +21,7 @@ import Card from '../../models/Card.js';
 import {
   createDeckWithCards,
   deleteDeck,
+  getDecksByUser,
 } from '../../controllers/deckController.js';
 
 function makeRes() {
@@ -154,5 +155,31 @@ describe('deleteDeck', () => {
     await deleteDeck(req, res);
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ error: 'Unauthorized' });
+  });
+});
+
+// ─── getDecksByUser ───────────────────────────────────────────────────
+
+describe('getDecksByUser', () => {
+  it('returns 400 for invalid user ObjectId', async () => {
+    const req = { params: { user_id: 'bad-id' } };
+    const res = makeRes();
+    await getDecksByUser(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid user ID' });
+  });
+
+  it('queries by owner field and returns decks', async () => {
+    const userId = '507f1f77bcf86cd799439011';
+    const mockDecks = [{ _id: 'deck1', owner: userId }];
+    Deck.find.mockResolvedValue(mockDecks);
+
+    const req = { params: { user_id: userId } };
+    const res = makeRes();
+    await getDecksByUser(req, res);
+
+    expect(Deck.find).toHaveBeenCalledWith({ owner: userId });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(mockDecks);
   });
 });

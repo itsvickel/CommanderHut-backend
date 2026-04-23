@@ -95,9 +95,12 @@ export const deleteDeck = async (req, res) => {
 };
 
 export const getDecksByUser = async (req, res) => {
-  const { userId } = req.params;
+  const { user_id } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(user_id)) {
+    return res.status(400).json({ error: 'Invalid user ID' });
+  }
   try {
-    const decks = await Deck.find({ user_id: userId });
+    const decks = await Deck.find({ owner: user_id });
     res.status(200).json(decks);
   } catch (error) {
     console.error('Error fetching decks by user:', error);
