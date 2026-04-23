@@ -1,30 +1,7 @@
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 
-const MODEL = 'gemini-2.0-flash';
-
-const responseSchema = {
-  type: 'object',
-  properties: {
-    commander: { type: 'string' },
-    color_identity: {
-      type: 'array',
-      items: { type: 'string', enum: ['W', 'U', 'B', 'R', 'G'] },
-    },
-    strategy: { type: 'string' },
-    signature_cards: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          role: { type: 'string', enum: ['win_con', 'ramp', 'draw', 'removal', 'interaction', 'synergy', 'utility'] },
-        },
-        required: ['name', 'role'],
-      },
-    },
-  },
-  required: ['commander', 'color_identity', 'strategy', 'signature_cards'],
-};
+const MODEL = 'llama-3.3-70b-versatile';
+const BASE_URL = 'https://api.groq.com/openai/v1';
 
 function systemPrompt({ budget_usd, power_bracket }) {
   const bracketNote = {
@@ -37,25 +14,33 @@ function systemPrompt({ budget_usd, power_bracket }) {
 
   return [
     'You are a Commander deck-building expert.',
-    'Output strict JSON matching the schema. Do not invent card names — use real Magic: The Gathering cards.',
+    'Output ONLY valid JSON — no markdown, no explanation, no code fences.',
+    'Required JSON keys:',
+    '  commander: string (exact real Magic: The Gathering card name)',
+    '  color_identity: array of letters from W U B R G only',
+    '  strategy: string, max 400 chars',
+    '  signature_cards: array of 25-35 objects, each with:',
+    '    name: string (exact real Magic: The Gathering card name)',
+    '    role: one of win_con | ramp | draw | removal | interaction | synergy | utility',
+    'Do not invent card names.',
     `Power Bracket ${power_bracket}: ${bracketNote}`,
     budget_usd ? `Approximate total deck budget: $${budget_usd} USD. Prefer cheaper staples.` : '',
-    'Produce: a commander, the commander color identity (WUBRG letters), a short strategy (≤ 400 chars), and 25-35 signature cards each tagged with a role.',
   ].filter(Boolean).join('\n');
 }
 
 export async function callGemini({ prompt, budget_usd, power_bracket, apiKey }) {
-  const ai = new GoogleGenAI({ apiKey: apiKey ?? process.env.GEMINI_API_KEY });
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: [{
-      role: 'user',
-      parts: [{ text: `${systemPrompt({ budget_usd, power_bracket })}\n\nUser request: ${prompt}` }],
-    }],
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema,
-    },
+  const client = new OpenAI({
+    apiKey: apiKey ?? process.env.GROQ_API_KEY,
+    baseURL: BASE_URL,
   });
-  return { raw: response.text, model: MODEL };
+  const response = await client.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: 'system', content: systemPrompt({ budget_usd, power_bracket }) },
+      { role: 'user', content: prompt },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.8,
+  });
+  return { raw: response.choices[0].message.content, model: MODEL };
 }
