@@ -28,9 +28,11 @@ const BRACKET_NOTES = {
 };
 
 let cache = { data: null, expiresAt: 0 };
+let inflightFetch = null;
 
 export function invalidatePromptCache() {
   cache = { data: null, expiresAt: 0 };
+  inflightFetch = null;
 }
 
 async function fetchPrompt() {
@@ -39,16 +41,29 @@ async function fetchPrompt() {
     return doc ?? DEFAULTS;
   } catch (err) {
     console.warn('[promptCache] DB fetch failed, using defaults:', err.message);
-    return DEFAULTS;
+    return null; // signals error — caller should NOT cache this
   }
 }
 
-export async function buildSystemPrompt({ budget_usd, power_bracket }) {
-  if (Date.now() > cache.expiresAt) {
-    cache = { data: await fetchPrompt(), expiresAt: Date.now() + 60_000 };
+async function getOrFetch() {
+  if (Date.now() <= cache.expiresAt) return cache.data;
+  if (!inflightFetch) {
+    inflightFetch = fetchPrompt().then(data => {
+      if (data !== null) {
+        cache = { data, expiresAt: Date.now() + 60_000 };
+      }
+      inflightFetch = null;
+      return data ?? DEFAULTS;
+    }).catch(() => {
+      inflightFetch = null;
+      return DEFAULTS;
+    });
   }
+  return inflightFetch;
+}
 
-  const { role_description, domain_restrictions, additional_rules } = cache.data;
+export async function buildSystemPrompt({ budget_usd, power_bracket }) {
+  const { role_description, domain_restrictions, additional_rules } = await getOrFetch();
   const bracketNote = BRACKET_NOTES[power_bracket] ?? '';
 
   return [
@@ -57,6 +72,6 @@ export async function buildSystemPrompt({ budget_usd, power_bracket }) {
     OUTPUT_FORMAT,
     additional_rules || null,
     `Power Bracket ${power_bracket}: ${bracketNote}`,
-    budget_usd ? `Approximate total deck budget: $${budget_usd} USD. Prefer cheaper staples.` : null,
+    budget_usd != null ? `Approximate total deck budget: $${budget_usd} USD. Prefer cheaper staples.` : null,
   ].filter(Boolean).join('\n\n');
 }

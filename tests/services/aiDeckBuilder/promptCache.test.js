@@ -1,15 +1,15 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-vi.mock('../../models/MasterPrompt.js', () => ({
+vi.mock('../../../models/MasterPrompt.js', () => ({
   default: { findOne: vi.fn() },
 }));
 
-import MasterPrompt from '../../models/MasterPrompt.js';
+import MasterPrompt from '../../../models/MasterPrompt.js';
 import {
   buildSystemPrompt,
   invalidatePromptCache,
   OUTPUT_FORMAT,
-} from '../../services/aiDeckBuilder/promptCache.js';
+} from '../../../services/aiDeckBuilder/promptCache.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -87,5 +87,22 @@ describe('buildSystemPrompt', () => {
     const result = await buildSystemPrompt({ budget_usd: null, power_bracket: 2 });
     expect(result).toContain(docFixture.domain_restrictions);
     expect(result).toContain(OUTPUT_FORMAT);
+  });
+
+  it('includes budget note when budget_usd is 0', async () => {
+    MasterPrompt.findOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(docFixture) });
+    const result = await buildSystemPrompt({ budget_usd: 0, power_bracket: 2 });
+    expect(result).toContain('$0 USD');
+  });
+
+  it('does not cache DB errors — retries on next call', async () => {
+    MasterPrompt.findOne.mockReturnValue({ lean: vi.fn().mockRejectedValue(new Error('DB down')) });
+    await buildSystemPrompt({ budget_usd: null, power_bracket: 1 });
+    // Second call should also hit DB since errors aren't cached
+    MasterPrompt.findOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(docFixture) });
+    invalidatePromptCache(); // ensure clean state for this test
+    MasterPrompt.findOne.mockReturnValue({ lean: vi.fn().mockRejectedValue(new Error('DB down')) });
+    await buildSystemPrompt({ budget_usd: null, power_bracket: 1 });
+    expect(MasterPrompt.findOne).toHaveBeenCalledTimes(2);
   });
 });
