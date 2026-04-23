@@ -241,5 +241,27 @@ describe('getDecks', () => {
     await getDecks(req, res);
 
     expect(limitMock).toHaveBeenCalledWith(100);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      decks: [],
+      total: 0,
+      page: 1,
+      pages: 0,
+    });
+  });
+
+  it('returns 500 when the database throws', async () => {
+    Deck.find.mockReturnValue({
+      skip: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockRejectedValue(new Error('DB error')),
+    });
+    Deck.countDocuments.mockResolvedValue(0);
+
+    const req = { query: {} };
+    const res = makeRes();
+    await getDecks(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Failed to fetch decks' });
   });
 });
