@@ -6,8 +6,8 @@ export async function addUser(req, res) {
     const { username, email_address, password } = req.body;
 
     const trimmedUsername = typeof username === 'string' ? username.trim() : '';
-    if (trimmedUsername.length < 2) {
-      return res.status(400).json({ error: 'Username must be at least 2 characters' });
+    if (trimmedUsername.length < 2 || trimmedUsername.length > 30) {
+      return res.status(400).json({ error: 'Username must be 2–30 characters' });
     }
 
     const normalizedEmail = typeof email_address === 'string'
