@@ -1,13 +1,16 @@
-import express from "express";
-import { generateDeckDeepSeek } from "../controllers/ai/deepseekAIController.js";
-import { generateDeckGemini } from "../controllers/ai/geminiAIController.js";
+import express from 'express';
+import { generateDeckDeepSeek } from '../controllers/ai/deepseekAIController.js';
+import { generateDeckGemini } from '../controllers/ai/geminiAIController.js';
+import { generate, save } from '../controllers/ai/deckBuilderController.js';
+import authMiddleware from '../middleware/authMiddleware.js';
+import { dailyCap } from '../middleware/dailyCap.js';
 
 const router = express.Router();
 
-// Route for DeepSeek
-router.post("/deepseek", generateDeckDeepSeek);
+router.post('/deepseek', generateDeckDeepSeek);
+router.post('/gemini', generateDeckGemini);
 
-// Route for Gemini
-router.post("/gemini", generateDeckGemini);
+router.post('/ai/deck/generate', authMiddleware, dailyCap, generate);
+router.post('/ai/deck/save', authMiddleware, save);
 
 export default router;
