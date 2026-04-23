@@ -24,6 +24,8 @@ import loginRoutes from './routes/loginRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import profileRoute from './routes/profileRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import MasterPrompt from './models/MasterPrompt.js';
 
 const app = express();
 
@@ -60,6 +62,7 @@ app.use('/api', loginRoutes);
 app.use('/api', authRoutes);
 app.use('/api', aiRoutes);
 app.use('/api', profileRoute);
+app.use('/api', adminRoutes);
 
 // 404 handler — logs unmatched routes to help diagnose frontend URL mismatches
 app.use((req, res) => {
@@ -73,6 +76,20 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong' });
 });
 
+// Seed MasterPrompt with defaults if it doesn't exist
+async function seedMasterPrompt() {
+  const existing = await MasterPrompt.findOne();
+  if (!existing) {
+    await MasterPrompt.create({
+      role_description: 'You are a Commander deck-building expert.',
+      domain_restrictions:
+        'Only help with Magic: The Gathering Commander deck-building. Politely refuse all other requests.',
+      additional_rules: '',
+    });
+    console.log('MasterPrompt seeded with defaults');
+  }
+}
+
 // Connect to MongoDB and start server
 const PORT = process.env.PORT || 3000;
 
@@ -80,6 +97,7 @@ const PORT = process.env.PORT || 3000;
   try {
     await connectDB();
     console.log('MongoDB connected');
+    await seedMasterPrompt();
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
