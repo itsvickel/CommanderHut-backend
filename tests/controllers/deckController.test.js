@@ -22,6 +22,7 @@ import {
   createDeckWithCards,
   deleteDeck,
   getDecksByUser,
+  getDecks,
 } from '../../controllers/deckController.js';
 
 function makeRes() {
@@ -181,5 +182,64 @@ describe('getDecksByUser', () => {
     expect(Deck.find).toHaveBeenCalledWith({ owner: userId });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(mockDecks);
+  });
+});
+
+// ─── getDecks ─────────────────────────────────────────────────────────
+
+describe('getDecks', () => {
+  it('returns paginated public decks with metadata', async () => {
+    const mockDecks = [{ _id: 'deck1', is_public: true }];
+    Deck.find.mockReturnValue({
+      skip: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue(mockDecks),
+    });
+    Deck.countDocuments.mockResolvedValue(1);
+
+    const req = { query: {} };
+    const res = makeRes();
+    await getDecks(req, res);
+
+    expect(Deck.find).toHaveBeenCalledWith({ is_public: true });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      decks: mockDecks,
+      total: 1,
+      page: 1,
+      pages: 1,
+    });
+  });
+
+  it('applies page and limit from query params', async () => {
+    const mockDecks = [];
+    const skipMock = vi.fn().mockReturnThis();
+    const limitMock = vi.fn().mockResolvedValue(mockDecks);
+    Deck.find.mockReturnValue({ skip: skipMock, limit: limitMock });
+    Deck.countDocuments.mockResolvedValue(50);
+
+    const req = { query: { page: '3', limit: '5' } };
+    const res = makeRes();
+    await getDecks(req, res);
+
+    expect(skipMock).toHaveBeenCalledWith(10); // (3-1) * 5
+    expect(limitMock).toHaveBeenCalledWith(5);
+    expect(res.json).toHaveBeenCalledWith({
+      decks: mockDecks,
+      total: 50,
+      page: 3,
+      pages: 10,
+    });
+  });
+
+  it('clamps limit to max 100', async () => {
+    const limitMock = vi.fn().mockResolvedValue([]);
+    Deck.find.mockReturnValue({ skip: vi.fn().mockReturnThis(), limit: limitMock });
+    Deck.countDocuments.mockResolvedValue(0);
+
+    const req = { query: { limit: '9999' } };
+    const res = makeRes();
+    await getDecks(req, res);
+
+    expect(limitMock).toHaveBeenCalledWith(100);
   });
 });

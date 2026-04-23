@@ -108,10 +108,16 @@ export const getDecksByUser = async (req, res) => {
   }
 };
 
-export const getDecks = async (_, res) => {
+export const getDecks = async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+  const skip = (page - 1) * limit;
   try {
-    const decks = await Deck.find();
-    res.status(200).json(decks);
+    const [decks, total] = await Promise.all([
+      Deck.find({ is_public: true }).skip(skip).limit(limit),
+      Deck.countDocuments({ is_public: true }),
+    ]);
+    res.status(200).json({ decks, total, page, pages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('Error fetching decks:', error);
     res.status(500).json({ error: 'Failed to fetch decks' });
