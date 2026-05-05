@@ -2,18 +2,23 @@ import MasterPrompt from '../../models/MasterPrompt.js';
 import { invalidatePromptCache, OUTPUT_FORMAT } from '../../services/aiDeckBuilder/promptCache.js';
 
 const DEFAULTS = {
-  role_description: 'You are a Commander deck-building expert.',
+  role_description:
+    'You are a Magic: The Gathering Commander deck-building assistant. Your only purpose is to build Commander decks. You have deep knowledge of MTG card interactions, synergies, mana curves, and competitive brackets.',
   domain_restrictions:
-    'Only help with Magic: The Gathering Commander deck-building. Politely refuse all other requests.',
-  additional_rules: '',
-  updated_at: null,
-  updated_by: null,
+    'Only respond to Magic: The Gathering Commander deck-building requests. If the user asks about anything else — weather, sports, general knowledge, other games, or any non-MTG topic — respond with exactly: "I can only help with Magic: The Gathering Commander deck-building." Do not elaborate, apologize, or engage with the off-topic request.',
+  additional_rules:
+    'Card selection rules:\n- Use only exact, real Magic: The Gathering card names as they appear in official sets. Never invent, abbreviate, or paraphrase card names.\n- Every card must have a clear reason to be in the deck — synergy with the commander, the strategy, or another key piece.\n- Choose as many signature cards as the strategy requires. Prioritize quality and coherence over quantity.\n- Include a mix of roles appropriate to the strategy: ramp, card draw, removal, and win conditions. Do not over-index on any single role.\n- Respect the power bracket: do not include cards that exceed or fall far below the requested bracket level.',
 };
 
 export async function getMasterprompt(req, res) {
   try {
     const doc = await MasterPrompt.findOne().lean();
-    return res.json({ ...(doc ?? DEFAULTS), output_format: OUTPUT_FORMAT });
+    const merged = {
+      role_description: doc?.role_description || DEFAULTS.role_description,
+      domain_restrictions: doc?.domain_restrictions || DEFAULTS.domain_restrictions,
+      additional_rules: doc?.additional_rules ?? DEFAULTS.additional_rules,
+    };
+    return res.json({ ...merged, output_format: OUTPUT_FORMAT });
   } catch (err) {
     console.error('getMasterprompt failed:', err);
     return res.status(500).json({ error: 'Failed to fetch masterprompt' });
