@@ -43,7 +43,9 @@ describe('getMasterprompt', () => {
     const res = makeRes();
     await getMasterprompt(req, res);
     expect(res.json).toHaveBeenCalledWith({
-      ...docFixture,
+      role_description: docFixture.role_description,
+      domain_restrictions: docFixture.domain_restrictions,
+      additional_rules: docFixture.additional_rules,
       output_format: 'OUTPUT_FORMAT_SENTINEL',
     });
   });
