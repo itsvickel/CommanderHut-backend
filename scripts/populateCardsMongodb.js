@@ -1,8 +1,12 @@
 import 'dotenv/config';
+import { createRequire } from 'module';
 import axios from 'axios';
 import mongoose from 'mongoose';
 import Card from '../models/Card.js';
 import connectDB from '../config/db.js';
+
+const require = createRequire(import.meta.url);
+const { withParserAsStream } = require('stream-json/streamers/stream-array.js');
 
 const BULK_INDEX_URL = 'https://api.scryfall.com/bulk-data';
 const BATCH_SIZE = 1000;
@@ -33,6 +37,9 @@ function toCardDoc(card) {
 }
 
 async function sync() {
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI environment variable is not set');
+  }
   const startedAt = Date.now();
   await connectDB();
   console.log('Connected to MongoDB');
@@ -44,34 +51,55 @@ async function sync() {
   console.log(`Scryfall bulk updated_at: ${bulk.updated_at}`);
   console.log(`Downloading ${bulk.download_uri} ...`);
 
-  const cardRes = await axios.get(bulk.download_uri, { responseType: 'json' });
-  const cards = cardRes.data;
-  console.log(`Total cards in bulk: ${cards.length}`);
+  const cardRes = await axios.get(bulk.download_uri, { responseType: 'stream' });
+  const pipeline = withParserAsStream();
+  cardRes.data.pipe(pipeline);
 
+  let batch = [];
   let upserted = 0;
   let modified = 0;
-  for (let i = 0; i < cards.length; i += BATCH_SIZE) {
-    const slice = cards.slice(i, i + BATCH_SIZE);
-    const ops = slice.map(card => ({
+  let processed = 0;
+
+  for await (const { value: card } of pipeline) {
+    batch.push(card);
+    if (batch.length >= BATCH_SIZE) {
+      const ops = batch.map(c => ({
+        updateOne: {
+          filter: { scryfallId: c.id },
+          update: { $set: toCardDoc(c) },
+          upsert: true,
+        },
+      }));
+      const res = await Card.bulkWrite(ops, { ordered: false });
+      upserted += res.upsertedCount || 0;
+      modified += res.modifiedCount || 0;
+      processed += batch.length;
+      batch = [];
+      console.log(`Processed ${processed} cards...`);
+    }
+  }
+
+  if (batch.length > 0) {
+    const ops = batch.map(c => ({
       updateOne: {
-        filter: { scryfallId: card.id },
-        update: { $set: toCardDoc(card) },
+        filter: { scryfallId: c.id },
+        update: { $set: toCardDoc(c) },
         upsert: true,
       },
     }));
     const res = await Card.bulkWrite(ops, { ordered: false });
     upserted += res.upsertedCount || 0;
     modified += res.modifiedCount || 0;
-    console.log(`Processed ${Math.min(i + BATCH_SIZE, cards.length)} / ${cards.length}`);
+    processed += batch.length;
   }
 
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-  console.log(`Done. inserted=${upserted} updated=${modified} elapsed=${elapsed}s`);
+  console.log(`Done. inserted=${upserted} updated=${modified} total=${processed} elapsed=${elapsed}s`);
 }
 
 sync()
   .catch(err => {
-    console.error('Card sync failed:', err);
+    console.error('Card sync failed:', err.message || err);
     process.exitCode = 1;
   })
   .finally(async () => {
