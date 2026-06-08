@@ -20,26 +20,44 @@ export async function generate(req, res) {
   const { errors, bracket } = validateGenerateBody(req.body ?? {});
   if (errors.length) return res.status(400).json({ errors });
 
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const emit = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  let clientGone = false;
+  req.on('close', () => { clientGone = true; });
+
   try {
-    const preview = await generateDeck({
+    const result = await generateDeck({
       userId: req.user.id,
       prompt: req.body.prompt.trim(),
       budget_usd: req.body.budget_usd ?? null,
       power_bracket: bracket,
+      emit,
     });
-    return res.json(preview);
+
+    if (!clientGone) {
+      emit('result', result);
+      res.end();
+    }
   } catch (err) {
+    if (clientGone) return;
+
     if (err.code === 'COMMANDER_UNRESOLVED') {
-      return res.status(422).json({ error: err.message });
+      emit('error', { stage: 'validating_commander', message: err.message });
+    } else if (err.code === 'BUDGET_TOO_LOW') {
+      emit('error', { stage: 'filling', message: err.message, suggested_min_budget_usd: err.suggested_min_budget_usd });
+    } else {
+      console.error('deck generate failed:', err);
+      emit('error', { stage: 'generating', message: 'AI provider error — please try again' });
     }
-    if (err.code === 'BUDGET_TOO_LOW') {
-      return res.status(422).json({
-        error: err.message,
-        suggested_min_budget_usd: err.suggested_min_budget_usd,
-      });
-    }
-    console.error('deck generate failed:', err);
-    return res.status(502).json({ error: 'AI provider error' });
+    res.end();
   }
 }
 

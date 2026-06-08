@@ -12,6 +12,7 @@ import { filterByBracket } from './bracketFilter.js';
 import { fillEngine } from './fillEngine.js';
 import { cardRepo as defaultRepo } from './cardRepo.js';
 import { createPreviewCache } from './previewCache.js';
+import * as defaultScryfall from '../scryfallService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const gameChangers = JSON.parse(
@@ -23,42 +24,80 @@ const previewCache = createPreviewCache({ capacity: 500, ttlMs: 60 * 60 * 1000 }
 export function getPreview(id) { return previewCache.get(id); }
 export function deletePreview(id) { previewCache.delete(id); }
 
-export async function generateDeck({ userId, prompt, budget_usd, power_bracket, cardRepo = defaultRepo }) {
-  // 1. LLM call
-  const { raw, model } = await callGemini({ prompt, budget_usd, power_bracket });
-  const parsed = parseGeminiResponse(raw);
+function noop() {}
 
-  // 2. Commander
-  const commander = await resolveCommander(parsed.commander, cardRepo);
-  if (!commander) {
-    const err = new Error(`Commander "${parsed.commander}" could not be resolved`);
+export async function generateDeck({
+  userId,
+  prompt,
+  budget_usd,
+  power_bracket,
+  cardRepo = defaultRepo,
+  scryfallService = defaultScryfall,
+  emit = noop,
+}) {
+  emit('progress', { stage: 'generating', message: 'Generating deck concept...' });
+
+  // ── 1. Initial Gemini call ────────────────────────────────────────────────
+  let { raw, model: llmModel } = await callGemini({ prompt, budget_usd, power_bracket });
+  let parsed = parseGeminiResponse(raw);
+
+  // ── 2. Commander: validate on Scryfall with up to 2 retries ──────────────
+  let commanderResult = null;
+  let retryPrompt = prompt;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      emit('progress', { stage: 'generating', message: `Retrying commander selection (attempt ${attempt + 1})...` });
+      const retry = await callGemini({ prompt: retryPrompt, budget_usd, power_bracket });
+      parsed = parseGeminiResponse(retry.raw);
+    }
+
+    emit('progress', { stage: 'validating_commander', message: `Validating commander: ${parsed.commander.name}...` });
+    commanderResult = await resolveCommander(parsed.commander.name, cardRepo, scryfallService);
+
+    if (commanderResult.card) {
+      emit('progress', { stage: 'commander', message: `Commander confirmed: ${commanderResult.card.name}` });
+      break;
+    }
+
+    retryPrompt = `${prompt}\n\n${commanderResult.reason}. Pick a different legendary creature or planeswalker that can be your commander. Must be legal in Commander format.`;
+  }
+
+  if (!commanderResult?.card) {
+    const err = new Error('Could not find a valid commander for this theme after 3 attempts');
     err.code = 'COMMANDER_UNRESOLVED';
     throw err;
   }
 
-  // 3. Color identity (from the real card, not the LLM)
+  const commander = commanderResult.card;
   const colorIdentity = computeColorIdentity(commander);
 
-  // 4. Signatures
+  // ── 3. Signatures: Scryfall batch validation ──────────────────────────────
+  emit('progress', { stage: 'validating_cards', message: `Validating cards (0/${parsed.signature_cards.length})...` });
+
   let { resolved: signatures, dropped } = await resolveSignatures(
-    parsed.signature_cards, colorIdentity, cardRepo
+    parsed.signature_cards, colorIdentity, cardRepo, scryfallService
   );
 
-  // 5. Bracket filter
-  signatures = filterByBracket(signatures, power_bracket, gameChangers);
+  emit('progress', { stage: 'validating_cards', message: `Validated cards (${signatures.length}/${parsed.signature_cards.length} passed)` });
 
-  // 6. Single retry if too many dropped
+  // ── 4. Re-prompt if too many dropped ─────────────────────────────────────
   if (dropped.length > 5) {
-    const retryPrompt = `${prompt}\n\nDo not use these cards (they are unavailable or illegal for the color identity): ${dropped.join(', ')}`;
-    const { raw: raw2 } = await callGemini({ prompt: retryPrompt, budget_usd, power_bracket });
+    emit('progress', { stage: 'validating_cards', message: `${dropped.length} cards invalid — regenerating signature cards...` });
+    const reprompt = `${prompt}\n\nDo not use these cards (they are unavailable or illegal): ${dropped.join(', ')}`;
+    const { raw: raw2 } = await callGemini({ prompt: reprompt, budget_usd, power_bracket });
     const parsed2 = parseGeminiResponse(raw2);
     ({ resolved: signatures, dropped } = await resolveSignatures(
-      parsed2.signature_cards, colorIdentity, cardRepo
+      parsed2.signature_cards, colorIdentity, cardRepo, scryfallService
     ));
-    signatures = filterByBracket(signatures, power_bracket, gameChangers);
   }
 
-  // 7. Fill
+  // ── 5. Bracket filter ─────────────────────────────────────────────────────
+  signatures = filterByBracket(signatures, power_bracket, gameChangers);
+
+  // ── 6. Fill engine ────────────────────────────────────────────────────────
+  emit('progress', { stage: 'filling', message: 'Filling remaining slots...' });
+
   const commanderPrice = commander.prices?.usd ?? 0;
   const sigPrice = signatures.reduce((s, c) => s + (c.prices?.usd ?? 0), 0);
   const budgetRemaining = (budget_usd ?? Infinity) - commanderPrice - sigPrice;
@@ -75,7 +114,9 @@ export async function generateDeck({ userId, prompt, budget_usd, power_bracket, 
     budgetRemaining, cardRepo, gameChangers, strategy: parsed.strategy,
   });
 
-  // 8. Compose response
+  emit('progress', { stage: 'finalising', message: 'Finalising deck...' });
+
+  // ── 7. Compose result ─────────────────────────────────────────────────────
   const cards = filled.map(e => ({
     _id: e.card._id,
     name: e.card.name,
@@ -84,6 +125,7 @@ export async function generateDeck({ userId, prompt, budget_usd, power_bracket, 
     image_uris: e.card.image_uris,
     prices: e.card.prices,
   }));
+
   const budget_total_usd = commanderPrice + cards.reduce(
     (s, c) => s + (c.prices?.usd ?? 0) * c.quantity, 0
   );
@@ -97,7 +139,7 @@ export async function generateDeck({ userId, prompt, budget_usd, power_bracket, 
     prompt,
     power_bracket,
     budget_usd,
-    model,
+    model: llmModel,
     generated_at: new Date(),
   });
 
@@ -107,9 +149,11 @@ export async function generateDeck({ userId, prompt, budget_usd, power_bracket, 
       _id: commander._id,
       name: commander.name,
       image_uris: commander.image_uris,
+      reason: parsed.commander.reason,
     },
     cards,
     strategy: parsed.strategy,
+    themes: parsed.themes,
     budget_total_usd: Math.round(budget_total_usd * 100) / 100,
   };
 }

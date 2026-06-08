@@ -1,16 +1,6 @@
 import MasterPrompt from '../../models/MasterPrompt.js';
-
-export const OUTPUT_FORMAT = [
-  'Output ONLY valid JSON — no markdown, no bold (**), no explanation, no code fences.',
-  'Required JSON keys:',
-  '  commander: string (exact real Magic: The Gathering card name)',
-  '  color_identity: array of letters from W U B R G only',
-  '  strategy: string, max 400 chars',
-  '  signature_cards: array of objects, each with:',
-  '    name: string (exact real Magic: The Gathering card name)',
-  '    role: one of win_con | ramp | draw | removal | interaction | synergy | utility',
-  'Do not invent card names.',
-].join('\n');
+import { OUTPUT_FORMAT_V2 as OUTPUT_FORMAT } from './deckSchema.js';
+export { OUTPUT_FORMAT };
 
 const DEFAULTS = {
   role_description:
