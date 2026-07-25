@@ -9,6 +9,7 @@ import { resolveCommander } from './resolveCommander.js';
 import { resolveSignatures } from './resolveSignatures.js';
 import { computeColorIdentity } from './colorIdentity.js';
 import { filterByBracket, gameChangerAllowance } from './bracketFilter.js';
+import { groundedSynergyPick } from './groundedPick.js';
 import { fillEngine } from './fillEngine.js';
 import { cardRepo as defaultRepo } from './cardRepo.js';
 import { createPreviewCache } from './previewCache.js';
@@ -112,12 +113,10 @@ export async function generateDeck({
   const gcBudget = { remaining: gameChangerAllowance(power_bracket) };
   signatures = filterByBracket(signatures, power_bracket, gameChangers, gcBudget);
 
-  // ── 6. Fill engine ────────────────────────────────────────────────────────
-  emit('progress', { stage: 'filling', message: 'Filling remaining slots...' });
-
+  // ── 6. Budget check ───────────────────────────────────────────────────────
   const commanderPrice = commander.prices?.usd ?? 0;
   const sigPrice = signatures.reduce((s, c) => s + (c.prices?.usd ?? 0), 0);
-  const budgetRemaining = (budget_usd ?? Infinity) - commanderPrice - sigPrice;
+  let budgetRemaining = (budget_usd ?? Infinity) - commanderPrice - sigPrice;
 
   if (budget_usd != null && budgetRemaining < 0) {
     const err = new Error('Budget too low for even commander + signatures');
@@ -126,9 +125,44 @@ export async function generateDeck({
     throw err;
   }
 
+  // ── 6b. Grounded synergy pick ─────────────────────────────────────────────
+  // The LLM chooses from real, pre-validated DB candidates instead of
+  // inventing more names. Falls back to the deterministic fill on any error.
+  const roleTopUp = ['ramp', 'draw', 'removal'].reduce(
+    (sum, role) => sum + Math.max(0, 10 - signatures.filter(c => c.role === role).length), 0
+  );
+  const synergySlots = Math.min(25, Math.max(0, 99 - 36 - signatures.length - roleTopUp));
+  if (synergySlots > 0) {
+    emit('progress', { stage: 'filling', message: 'Selecting synergy package...' });
+    try {
+      const ground = await groundedSynergyPick({
+        commander,
+        colorIdentity,
+        themes: parsed.themes,
+        strategy: parsed.strategy,
+        budgetRemaining,
+        excludeIds: [commander._id, ...signatures.map(s => s._id)],
+        cardRepo,
+        slots: synergySlots,
+      });
+      if (ground) {
+        trackUsage(ground.usage);
+        const safePicks = filterByBracket(ground.picks, power_bracket, gameChangers, gcBudget);
+        signatures = [...signatures, ...safePicks];
+        budgetRemaining -= safePicks.reduce((s, c) => s + (c.prices?.usd ?? 0), 0);
+      }
+    } catch (err) {
+      console.warn('[pipeline] grounded synergy pick failed, using deterministic fill:', err.message);
+    }
+  }
+
+  // ── 6c. Fill engine ───────────────────────────────────────────────────────
+  emit('progress', { stage: 'filling', message: 'Filling remaining slots...' });
+
   const filled = await fillEngine({
     commander, signatures, colorIdentity, bracket: power_bracket,
-    budgetRemaining, cardRepo, gameChangers, strategy: parsed.strategy,
+    budgetRemaining, cardRepo, gameChangers,
+    strategy: parsed.strategy, themes: parsed.themes,
   });
 
   emit('progress', { stage: 'finalising', message: 'Finalising deck...' });

@@ -52,27 +52,42 @@ export const cardRepo = {
 
   async findByRole({ role, colorIdentity, excludeIds, maxPrice, limit = 50 }) {
     const roleFilter = roleQuery(role);
-    return Card.find({
+    return rankedFind({
       ...commanderLegal(),
       ...identityFilter(colorIdentity),
-      ...notInExcluded(excludeIds),
       ...priceUnder(maxPrice),
       ...roleFilter,
       type_line: { $not: LAND_TYPE_RE },
-    }).sort({ 'prices.usd': 1 }).limit(limit).lean();
+    }, excludeIds, limit);
   },
 
   async findNonBasicLands({ colorIdentity, excludeIds, maxPrice, limit = 50 }) {
-    return Card.find({
+    return rankedFind({
       ...commanderLegal(),
       ...identityFilter(colorIdentity),
-      ...notInExcluded(excludeIds),
       ...priceUnder(maxPrice),
       $and: [
         { type_line: { $regex: LAND_TYPE_RE } },
         { type_line: { $not: BASIC_LAND_TYPE_RE } },
       ],
-    }).sort({ 'prices.usd': 1 }).limit(limit).lean();
+    }, excludeIds, limit);
+  },
+
+  /**
+   * Non-land candidates for the grounded synergy pick, most-played first
+   * (EDHREC rank ascending). Unranked cards are excluded — the deterministic
+   * fill covers them if the pool runs thin.
+   */
+  async findSynergyCandidates({ colorIdentity, excludeIds = [], maxPrice, limit = 300 }) {
+    return Card.find({
+      ...commanderLegal(),
+      ...identityFilter(colorIdentity),
+      ...notInExcluded(excludeIds),
+      ...priceUnder(maxPrice),
+      type_line: { $not: LAND_TYPE_RE },
+      layout: { $nin: ['token', 'double_faced_token'] },
+      edhrec_rank: { $ne: null },
+    }).sort({ edhrec_rank: 1 }).limit(limit).lean();
   },
 
   async findBasicLandByColor(colorLetter) {
@@ -86,6 +101,26 @@ export const cardRepo = {
     return Card.findOne({ name: 'Wastes' }).lean();
   },
 };
+
+// Most-played first (EDHREC rank), topped up with cheapest unranked cards —
+// quality-ordered pools instead of the old cheapest-first ordering.
+async function rankedFind(baseFilter, excludeIds = [], limit = 50) {
+  const ranked = await Card.find({
+    ...baseFilter,
+    ...notInExcluded(excludeIds),
+    edhrec_rank: { $ne: null },
+  }).sort({ edhrec_rank: 1 }).limit(limit).lean();
+
+  if (ranked.length >= limit) return ranked;
+
+  const rest = await Card.find({
+    ...baseFilter,
+    ...notInExcluded([...excludeIds, ...ranked.map(c => c._id)]),
+    edhrec_rank: null,
+  }).sort({ 'prices.usd': 1 }).limit(limit - ranked.length).lean();
+
+  return [...ranked, ...rest];
+}
 
 function roleQuery(role) {
   switch (role) {
