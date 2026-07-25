@@ -1,10 +1,17 @@
 import Card from '../models/Card.js';
 import { parseQ, buildFilter } from '../services/cardSearch/queryBuilder.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
-export const getAllCards = async (_, res) => {
+export const getAllCards = async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 100));
+  const skip = (page - 1) * limit;
   try {
-    const cards = await Card.find();
-    res.json(cards);
+    const [cards, total] = await Promise.all([
+      Card.find().skip(skip).limit(limit).lean(),
+      Card.estimatedDocumentCount(),
+    ]);
+    res.json({ cards, total, page, pages: total === 0 ? 1 : Math.ceil(total / limit), limit });
   } catch (err) {
     res.status(500).json({ error: 'Failed to retrieve cards' });
   }
@@ -35,8 +42,8 @@ export const getCardBySetAndCollectorNumber = async (req, res) => {
 
 export const getCardByName = async (req, res) => {
   try {
-    const regex = new RegExp(req.params.name, 'i');
-    const cards = await Card.find({ name: regex });
+    const regex = new RegExp(escapeRegex(req.params.name), 'i');
+    const cards = await Card.find({ name: regex }).limit(50);
     if (!cards.length) return res.status(404).json({ error: 'Card not found' });
     res.json(cards);
   } catch (err) {
@@ -87,7 +94,7 @@ export const postCardsBulkByName = async (req, res) => {
     return res.status(400).json({ error: 'Please provide a non-empty array of card names.' });
 
   try {
-    const lowerNames = cards.map(c => new RegExp(`^${c}$`, 'i'));
+    const lowerNames = cards.map(c => new RegExp(`^${escapeRegex(c)}$`, 'i'));
     const foundCards = await Card.find({
       name: { $in: lowerNames },
       layout: { $nin: ['token', 'double_faced_token'] },

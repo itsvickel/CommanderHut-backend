@@ -98,11 +98,15 @@ export const deleteDeck = async (req, res) => {
 
 export const getDecksByUser = async (req, res) => {
   const { user_id } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(user_id)) {
+  // User ids are UUID strings, not ObjectIds.
+  if (typeof user_id !== 'string' || !user_id.trim() || user_id.length > 64) {
     return res.status(400).json({ error: 'Invalid user ID' });
   }
   try {
-    const decks = await Deck.find({ owner: user_id });
+    const filter = { owner: user_id };
+    // Private decks are only visible to their owner.
+    if (req.user?.id !== user_id) filter.is_public = true;
+    const decks = await Deck.find(filter);
     res.status(200).json(decks);
   } catch (error) {
     console.error('Error fetching decks by user:', error);

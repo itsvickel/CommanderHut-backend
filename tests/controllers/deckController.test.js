@@ -162,26 +162,38 @@ describe('deleteDeck', () => {
 // ─── getDecksByUser ───────────────────────────────────────────────────
 
 describe('getDecksByUser', () => {
-  it('returns 400 for invalid user ObjectId', async () => {
-    const req = { params: { user_id: 'bad-id' } };
+  it('returns 400 for an unreasonably long user id', async () => {
+    const req = { params: { user_id: 'x'.repeat(65) } };
     const res = makeRes();
     await getDecksByUser(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({ error: 'Invalid user ID' });
   });
 
-  it('queries by owner field and returns decks', async () => {
-    const userId = '507f1f77bcf86cd799439011';
+  it('accepts UUID string ids and returns all decks to their owner', async () => {
+    const userId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
     const mockDecks = [{ _id: 'deck1', owner: userId }];
     Deck.find.mockResolvedValue(mockDecks);
 
-    const req = { params: { user_id: userId } };
+    const req = { params: { user_id: userId }, user: { id: userId } };
     const res = makeRes();
     await getDecksByUser(req, res);
 
     expect(Deck.find).toHaveBeenCalledWith({ owner: userId });
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(mockDecks);
+  });
+
+  it('only returns public decks to non-owners', async () => {
+    const userId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+    Deck.find.mockResolvedValue([]);
+
+    const req = { params: { user_id: userId } };
+    const res = makeRes();
+    await getDecksByUser(req, res);
+
+    expect(Deck.find).toHaveBeenCalledWith({ owner: userId, is_public: true });
+    expect(res.status).toHaveBeenCalledWith(200);
   });
 });
 

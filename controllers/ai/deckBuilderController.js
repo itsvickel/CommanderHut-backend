@@ -1,5 +1,6 @@
 import Deck from '../../models/Deck.js';
 import { generateDeck, getPreview, deletePreview } from '../../services/aiDeckBuilder/pipeline.js';
+import { refundDailyUse } from '../../middleware/dailyCap.js';
 
 function validateGenerateBody(body) {
   const errors = [];
@@ -47,6 +48,7 @@ export async function generate(req, res) {
       res.end();
     }
   } catch (err) {
+    await refundDailyUse(req.user.id);
     if (clientGone) return;
 
     if (err.code === 'COMMANDER_UNRESOLVED') {
