@@ -26,6 +26,11 @@ const deckSchema = new mongoose.Schema({
     power_bracket: Number,
     budget_usd: Number,
     model: String,
+    usage: {
+      input_tokens: Number,
+      output_tokens: Number,
+      cost_usd: Number,
+    },
     generated_at: Date,
   },
 }, {

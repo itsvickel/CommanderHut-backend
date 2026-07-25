@@ -13,6 +13,11 @@ describe('computeColorIdentity', () => {
   it('returns [] for a colorless commander', () => {
     expect(computeColorIdentity({ colors: [] })).toEqual([]);
   });
+
+  it('prefers color_identity over colors when both exist', () => {
+    // e.g. a mono-blue creature with a black activation cost
+    expect(computeColorIdentity({ colors: ['U'], color_identity: ['U', 'B'] })).toEqual(['U', 'B']);
+  });
 });
 
 describe('isWithinIdentity', () => {
@@ -30,5 +35,10 @@ describe('isWithinIdentity', () => {
 
   it('rejects any color card in a colorless identity', () => {
     expect(isWithinIdentity({ colors: ['U'] }, [])).toBe(false);
+  });
+
+  it('rejects a card whose color_identity exceeds the deck identity even if colors fit', () => {
+    // hybrid/off-color activation: colors [] but identity ['W']
+    expect(isWithinIdentity({ colors: [], color_identity: ['W'] }, ['R', 'G'])).toBe(false);
   });
 });

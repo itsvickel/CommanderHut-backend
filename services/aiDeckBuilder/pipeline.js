@@ -3,12 +3,12 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
-import { callGemini } from './geminiClient.js';
-import { parseGeminiResponse } from './parseResponse.js';
+import { callLLM } from './llmClient.js';
+import { parseLlmResponse } from './parseResponse.js';
 import { resolveCommander } from './resolveCommander.js';
 import { resolveSignatures } from './resolveSignatures.js';
 import { computeColorIdentity } from './colorIdentity.js';
-import { filterByBracket } from './bracketFilter.js';
+import { filterByBracket, gameChangerAllowance } from './bracketFilter.js';
 import { fillEngine } from './fillEngine.js';
 import { cardRepo as defaultRepo } from './cardRepo.js';
 import { createPreviewCache } from './previewCache.js';
@@ -37,9 +37,20 @@ export async function generateDeck({
 }) {
   emit('progress', { stage: 'generating', message: 'Generating deck concept...' });
 
-  // ── 1. Initial Gemini call ────────────────────────────────────────────────
-  let { raw, model: llmModel } = await callGemini({ prompt, budget_usd, power_bracket });
-  let parsed = parseGeminiResponse(raw);
+  // Aggregate token usage across every LLM call in this generation.
+  const usage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
+  const trackUsage = (u) => {
+    if (!u) return;
+    usage.input_tokens += u.input_tokens ?? 0;
+    usage.output_tokens += u.output_tokens ?? 0;
+    usage.cost_usd += u.cost_usd ?? 0;
+  };
+
+  // ── 1. Initial LLM call ───────────────────────────────────────────────────
+  const first = await callLLM({ prompt, budget_usd, power_bracket });
+  trackUsage(first.usage);
+  const llmModel = first.model;
+  let parsed = parseLlmResponse(first.raw);
 
   // ── 2. Commander: validate on Scryfall with up to 2 retries ──────────────
   let commanderResult = null;
@@ -48,8 +59,9 @@ export async function generateDeck({
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) {
       emit('progress', { stage: 'generating', message: `Retrying commander selection (attempt ${attempt + 1})...` });
-      const retry = await callGemini({ prompt: retryPrompt, budget_usd, power_bracket });
-      parsed = parseGeminiResponse(retry.raw);
+      const retry = await callLLM({ prompt: retryPrompt, budget_usd, power_bracket });
+      trackUsage(retry.usage);
+      parsed = parseLlmResponse(retry.raw);
     }
 
     emit('progress', { stage: 'validating_commander', message: `Validating commander: ${parsed.commander.name}...` });
@@ -70,7 +82,8 @@ export async function generateDeck({
   }
 
   const commander = commanderResult.card;
-  const colorIdentity = computeColorIdentity(commander);
+  // Prefer the live Scryfall card — it always carries true color_identity.
+  const colorIdentity = computeColorIdentity(commanderResult.scryfallCard ?? commander);
 
   // ── 3. Signatures: Scryfall batch validation ──────────────────────────────
   emit('progress', { stage: 'validating_cards', message: `Validating cards (0/${parsed.signature_cards.length})...` });
@@ -85,15 +98,19 @@ export async function generateDeck({
   if (dropped.length > 5) {
     emit('progress', { stage: 'validating_cards', message: `${dropped.length} cards invalid — regenerating signature cards...` });
     const reprompt = `${prompt}\n\nDo not use these cards (they are unavailable or illegal): ${dropped.join(', ')}`;
-    const { raw: raw2 } = await callGemini({ prompt: reprompt, budget_usd, power_bracket });
-    const parsed2 = parseGeminiResponse(raw2);
+    const second = await callLLM({ prompt: reprompt, budget_usd, power_bracket });
+    trackUsage(second.usage);
+    const parsed2 = parseLlmResponse(second.raw);
     ({ resolved: signatures, dropped } = await resolveSignatures(
       parsed2.signature_cards, colorIdentity, cardRepo, scryfallService
     ));
   }
 
   // ── 5. Bracket filter ─────────────────────────────────────────────────────
-  signatures = filterByBracket(signatures, power_bracket, gameChangers);
+  // Deck-wide Game Changer allowance (bracket 3 permits up to 3) is spent by
+  // the LLM's signature picks; the deterministic fill never adds Game Changers.
+  const gcBudget = { remaining: gameChangerAllowance(power_bracket) };
+  signatures = filterByBracket(signatures, power_bracket, gameChangers, gcBudget);
 
   // ── 6. Fill engine ────────────────────────────────────────────────────────
   emit('progress', { stage: 'filling', message: 'Filling remaining slots...' });
@@ -130,6 +147,8 @@ export async function generateDeck({
     (s, c) => s + (c.prices?.usd ?? 0) * c.quantity, 0
   );
 
+  usage.cost_usd = Math.round(usage.cost_usd * 1_000_000) / 1_000_000;
+
   const generation_id = crypto.randomUUID();
   previewCache.set(generation_id, {
     user_id: String(userId),
@@ -140,6 +159,7 @@ export async function generateDeck({
     power_bracket,
     budget_usd,
     model: llmModel,
+    usage,
     generated_at: new Date(),
   });
 
@@ -155,5 +175,6 @@ export async function generateDeck({
     strategy: parsed.strategy,
     themes: parsed.themes,
     budget_total_usd: Math.round(budget_total_usd * 100) / 100,
+    usage,
   };
 }

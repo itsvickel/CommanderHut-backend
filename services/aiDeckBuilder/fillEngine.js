@@ -4,6 +4,9 @@ import { filterByBracket } from './bracketFilter.js';
 const TARGET_LANDS = 35;
 const ROLE_QUOTAS = { ramp: 10, draw: 10, removal: 10 };
 const TOTAL_NON_COMMANDER_SLOTS = 99;
+// The deck-wide Game Changer allowance is reserved for the LLM's signature
+// picks (spent in the pipeline); deterministic fill never adds Game Changers.
+const NO_GC_BUDGET = () => ({ remaining: 0 });
 const BASIC_LAND_RE = /Basic\s+Land/;
 const LAND_RE = /\bLand\b/;
 
@@ -44,7 +47,7 @@ export async function fillEngine({
       maxPrice: Math.max(budget.remaining, 0),
       limit: need * 3,
     });
-    const filtered = filterByBracket(pool, bracket, gameChangers);
+    const filtered = filterByBracket(pool, bracket, gameChangers, NO_GC_BUDGET());
     let added = 0;
     for (const c of filtered) {
       if (added >= need) break;
@@ -60,7 +63,7 @@ export async function fillEngine({
     maxPrice: Math.max(budget.remaining, 0),
     limit: nonBasicTarget * 3,
   });
-  const nbFiltered = filterByBracket(nbPool, bracket, gameChangers);
+  const nbFiltered = filterByBracket(nbPool, bracket, gameChangers, NO_GC_BUDGET());
   let nbAdded = 0;
   for (const l of nbFiltered) {
     if (nbAdded >= nonBasicTarget) break;
@@ -77,7 +80,7 @@ export async function fillEngine({
       maxPrice: Math.max(budget.remaining, 0),
       limit: nonLandSlotsLeft * 3,
     });
-    const filtered = filterByBracket(pool, bracket, gameChangers);
+    const filtered = filterByBracket(pool, bracket, gameChangers, NO_GC_BUDGET());
     let added = 0;
     for (const c of filtered) {
       if (added >= nonLandSlotsLeft) break;

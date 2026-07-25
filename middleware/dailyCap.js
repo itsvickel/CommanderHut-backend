@@ -65,3 +65,23 @@ export async function refundDailyUse(userId) {
     console.error('refundDailyUse error:', err);
   }
 }
+
+// Accumulate LLM token usage onto the user's daily record.
+export async function recordTokenUsage(userId, usage) {
+  if (!usage) return;
+  try {
+    await AIUsage.findOneAndUpdate(
+      { user: userId, date: todayUtc() },
+      {
+        $inc: {
+          input_tokens: usage.input_tokens ?? 0,
+          output_tokens: usage.output_tokens ?? 0,
+          cost_usd: usage.cost_usd ?? 0,
+        },
+      },
+      { upsert: true }
+    );
+  } catch (err) {
+    console.error('recordTokenUsage error:', err);
+  }
+}

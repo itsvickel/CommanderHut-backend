@@ -1,6 +1,6 @@
 import Deck from '../../models/Deck.js';
 import { generateDeck, getPreview, deletePreview } from '../../services/aiDeckBuilder/pipeline.js';
-import { refundDailyUse } from '../../middleware/dailyCap.js';
+import { refundDailyUse, recordTokenUsage } from '../../middleware/dailyCap.js';
 
 function validateGenerateBody(body) {
   const errors = [];
@@ -42,6 +42,8 @@ export async function generate(req, res) {
       power_bracket: bracket,
       emit,
     });
+
+    await recordTokenUsage(req.user.id, result.usage);
 
     if (!clientGone) {
       emit('result', result);
@@ -90,6 +92,7 @@ export async function save(req, res) {
         power_bracket: preview.power_bracket,
         budget_usd: preview.budget_usd,
         model: preview.model,
+        usage: preview.usage ?? null,
         generated_at: preview.generated_at,
       },
       cards: preview.cards.map(e => ({

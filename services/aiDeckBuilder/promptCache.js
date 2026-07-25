@@ -12,9 +12,9 @@ const DEFAULTS = {
 };
 
 const BRACKET_NOTES = {
-  1: 'Ultra-casual: no Game Changers, no fast mana, no tutors.',
-  2: 'Precon-level core: limited tutors, no Game Changers.',
-  3: 'Upgraded precons: no Game Changers; avoid mass land destruction.',
+  1: 'Exhibition/ultra-casual: no Game Changers, no mass land denial, no extra-turn cards, no fast mana, few tutors.',
+  2: 'Core/precon-level: no Game Changers, no mass land denial, no extra-turn cards, limited tutors.',
+  3: 'Upgraded: up to THREE Game Changers allowed; no mass land denial; extra turns only in moderation.',
   4: 'Optimized, non-cEDH. All Game Changers allowed.',
   5: 'Competitive EDH. Anything format-legal.',
 };

@@ -1,5 +1,5 @@
 import { validateLlmResponse } from './deckSchema.js';
 
-export function parseGeminiResponse(input) {
+export function parseLlmResponse(input) {
   return validateLlmResponse(input);
 }

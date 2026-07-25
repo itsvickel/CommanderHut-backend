@@ -12,7 +12,13 @@ function commanderLegal() {
 }
 
 function identityFilter(identity) {
-  return { colors: { $not: { $elemMatch: { $nin: identity } } } };
+  // Enforce both fields: color_identity is the true identity (synced from
+  // Scryfall); a missing color_identity passes its $not clause, in which
+  // case the colors clause still applies as a fallback for stale docs.
+  return {
+    color_identity: { $not: { $elemMatch: { $nin: identity } } },
+    colors: { $not: { $elemMatch: { $nin: identity } } },
+  };
 }
 
 function notInExcluded(excludeIds) {

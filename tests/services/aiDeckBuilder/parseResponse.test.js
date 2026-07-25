@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseGeminiResponse } from '../../../services/aiDeckBuilder/parseResponse.js';
+import { parseLlmResponse as parseGeminiResponse } from '../../../services/aiDeckBuilder/parseResponse.js';
 
 const valid = {
   commander: { name: 'Krenko, Mob Boss', reason: 'Best goblin commander' },
