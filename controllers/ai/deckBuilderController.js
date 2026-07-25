@@ -61,7 +61,7 @@ export async function save(req, res) {
     return res.status(400).json({ error: 'generation_id and deck_name required' });
   }
 
-  const preview = getPreview(generation_id);
+  const preview = await getPreview(generation_id);
   if (!preview) return res.status(410).json({ error: 'generation expired, regenerate' });
   if (preview.user_id !== String(req.user.id)) {
     return res.status(403).json({ error: 'not your generation' });
@@ -91,7 +91,7 @@ export async function save(req, res) {
       })),
     });
 
-    deletePreview(generation_id);
+    await deletePreview(generation_id);
     return res.status(201).json({ deck });
   } catch (err) {
     console.error('deck save failed:', err);

@@ -9,17 +9,14 @@ import { filterByBracket, gameChangerAllowance } from './bracketFilter.js';
 import { groundedSynergyPick } from './groundedPick.js';
 import { fillEngine } from './fillEngine.js';
 import { cardRepo as defaultRepo } from './cardRepo.js';
-import { createPreviewCache } from './previewCache.js';
 import { loadGameChangers } from './gameChangerList.js';
+import { setPreview } from './previewStore.js';
+import { createRunLogger } from '../../utils/pipelineLogger.js';
 import * as defaultScryfall from '../scryfallService.js';
 
 const gameChangers = loadGameChangers();
 
-const previewCache = createPreviewCache({ capacity: 500, ttlMs: 60 * 60 * 1000 });
-
-export function getPreview(id) { return previewCache.get(id); }
-export function setPreview(id, value) { previewCache.set(id, value); }
-export function deletePreview(id) { previewCache.delete(id); }
+export { getPreview, setPreview, deletePreview } from './previewStore.js';
 
 function noop() {}
 
@@ -34,6 +31,10 @@ export async function generateDeck({
 }) {
   emit('progress', { stage: 'generating', message: 'Generating deck concept...' });
 
+  const log = createRunLogger('deck_generate', { userId });
+  log.set('power_bracket', power_bracket);
+  log.set('budget_usd', budget_usd);
+
   // Aggregate token usage across every LLM call in this generation.
   const usage = { input_tokens: 0, output_tokens: 0, cost_usd: 0 };
   const trackUsage = (u) => {
@@ -43,17 +44,29 @@ export async function generateDeck({
     usage.cost_usd += u.cost_usd ?? 0;
   };
 
+  try {
+    return await runGeneration();
+  } catch (err) {
+    log.finish('error', { error_code: err.code ?? 'UNKNOWN', usage });
+    throw err;
+  }
+
+  async function runGeneration() {
   // ── 1. Initial LLM call ───────────────────────────────────────────────────
   const first = await callLLM({ prompt, budget_usd, power_bracket });
   trackUsage(first.usage);
   const llmModel = first.model;
+  log.set('model', llmModel);
+  log.mark('llm_initial');
   let parsed = parseLlmResponse(first.raw);
 
   // ── 2. Commander: validate on Scryfall with up to 2 retries ──────────────
   let commanderResult = null;
   let retryPrompt = prompt;
+  let commanderAttempts = 0;
 
   for (let attempt = 0; attempt < 3; attempt++) {
+    commanderAttempts = attempt + 1;
     if (attempt > 0) {
       emit('progress', { stage: 'generating', message: `Retrying commander selection (attempt ${attempt + 1})...` });
       const retry = await callLLM({ prompt: retryPrompt, budget_usd, power_bracket });
@@ -71,6 +84,9 @@ export async function generateDeck({
 
     retryPrompt = `${prompt}\n\n${commanderResult.reason}. Pick a different legendary creature or planeswalker that can be your commander. Must be legal in Commander format.`;
   }
+
+  log.set('commander_attempts', commanderAttempts);
+  log.mark('commander_validation');
 
   if (!commanderResult?.card) {
     const err = new Error('Could not find a valid commander for this theme after 3 attempts');
@@ -91,6 +107,9 @@ export async function generateDeck({
 
   emit('progress', { stage: 'validating_cards', message: `Validated cards (${signatures.length}/${parsed.signature_cards.length} passed)` });
 
+  log.set('signatures_requested', parsed.signature_cards.length);
+  log.set('signatures_dropped', dropped.length);
+
   // ── 4. Re-prompt if too many dropped ─────────────────────────────────────
   if (dropped.length > 5) {
     emit('progress', { stage: 'validating_cards', message: `${dropped.length} cards invalid — regenerating signature cards...` });
@@ -101,7 +120,12 @@ export async function generateDeck({
     ({ resolved: signatures, dropped } = await resolveSignatures(
       parsed2.signature_cards, colorIdentity, cardRepo, scryfallService
     ));
+    log.set('signatures_reprompted', true);
+    log.set('signatures_dropped_after_retry', dropped.length);
   }
+
+  log.set('signatures_resolved', signatures.length);
+  log.mark('signature_validation');
 
   // ── 5. Bracket filter ─────────────────────────────────────────────────────
   // Deck-wide Game Changer allowance (bracket 3 permits up to 3) is spent by
@@ -146,10 +170,15 @@ export async function generateDeck({
         const safePicks = filterByBracket(ground.picks, power_bracket, gameChangers, gcBudget);
         signatures = [...signatures, ...safePicks];
         budgetRemaining -= safePicks.reduce((s, c) => s + (c.prices?.usd ?? 0), 0);
+        log.set('grounded_picks', safePicks.length);
+      } else {
+        log.set('grounded_picks', 0);
       }
     } catch (err) {
       console.warn('[pipeline] grounded synergy pick failed, using deterministic fill:', err.message);
+      log.set('grounded_pick_failed', true);
     }
+    log.mark('grounded_pick');
   }
 
   // ── 6c. Fill engine ───────────────────────────────────────────────────────
@@ -160,6 +189,7 @@ export async function generateDeck({
     budgetRemaining, cardRepo, gameChangers,
     strategy: parsed.strategy, themes: parsed.themes,
   });
+  log.mark('fill_engine');
 
   emit('progress', { stage: 'finalising', message: 'Finalising deck...' });
 
@@ -180,7 +210,7 @@ export async function generateDeck({
   usage.cost_usd = Math.round(usage.cost_usd * 1_000_000) / 1_000_000;
 
   const generation_id = crypto.randomUUID();
-  previewCache.set(generation_id, {
+  await setPreview(generation_id, {
     user_id: String(userId),
     commander,
     cards: filled,
@@ -192,6 +222,14 @@ export async function generateDeck({
     model: llmModel,
     usage,
     generated_at: new Date(),
+  });
+  log.mark('persist_preview');
+
+  log.finish('ok', {
+    commander: commander.name,
+    deck_size: cards.reduce((s, c) => s + c.quantity, 0) + 1,
+    budget_total_usd: Math.round(budget_total_usd * 100) / 100,
+    usage,
   });
 
   return {
@@ -208,4 +246,5 @@ export async function generateDeck({
     budget_total_usd: Math.round(budget_total_usd * 100) / 100,
     usage,
   };
+  }
 }

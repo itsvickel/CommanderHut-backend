@@ -14,7 +14,7 @@ import { openSseStream } from '../../utils/sse.js';
  */
 async function loadSource({ generation_id, deck_id, userId }) {
   if (generation_id) {
-    const preview = getPreview(generation_id);
+    const preview = await getPreview(generation_id);
     if (!preview) return { error: { status: 410, message: 'generation expired, regenerate' } };
     if (preview.user_id !== String(userId)) {
       return { error: { status: 403, message: 'not your generation' } };
