@@ -13,25 +13,31 @@ export function openSseStream(req, res, { heartbeatMs = HEARTBEAT_MS } = {}) {
   res.flushHeaders();
 
   let clientGone = false;
-  const heartbeat = setInterval(() => {
-    if (!clientGone) res.write(': ping\n\n');
-  }, heartbeatMs);
+
+  const stop = () => clearInterval(heartbeat);
+
+  // A socket can die before 'close' fires; treat any write failure as a
+  // disconnect rather than letting it surface as an unhandled error.
+  const write = (chunk) => {
+    if (clientGone) return;
+    try {
+      res.write(chunk);
+    } catch {
+      clientGone = true;
+      stop();
+    }
+  };
+
+  const heartbeat = setInterval(() => write(': ping\n\n'), heartbeatMs);
   // Don't hold the event loop open on shutdown.
   heartbeat.unref?.();
 
-  const stop = () => {
-    clearInterval(heartbeat);
-  };
-
-  req.on('close', () => {
-    clientGone = true;
-    stop();
-  });
+  res.on('error', () => { clientGone = true; stop(); });
+  req.on('close', () => { clientGone = true; stop(); });
 
   return {
     emit(event, data) {
-      if (clientGone) return;
-      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     },
     isClientGone: () => clientGone,
     end() {

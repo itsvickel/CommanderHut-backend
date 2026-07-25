@@ -4,8 +4,11 @@
  * checks can read type_line / oracle_text / color_identity.
  */
 
-const BASIC_LAND_RE = /Basic\s+Land/;
-const ANY_NUMBER_RE = /any number of cards named/i;
+// "Basic Snow Land — Forest" must match too, so allow words between the two.
+const BASIC_LAND_RE = /Basic(\s+\w+)*\s+Land/;
+// Covers "any number of cards named X" and bounded forms like Nazgûl's
+// "up to nine cards named" / Seven Dwarves' "up to seven cards named".
+const MULTI_COPY_RE = /(any number of|up to \w+) cards named/i;
 
 export function validateCommanderDeck({ entries, commanderDoc = null }) {
   const errors = [];
@@ -17,8 +20,8 @@ export function validateCommanderDeck({ entries, commanderDoc = null }) {
     total += quantity;
     if (quantity > 1) {
       const isBasic = BASIC_LAND_RE.test(card.type_line ?? '');
-      const allowsAnyNumber = ANY_NUMBER_RE.test(card.oracle_text ?? '');
-      if (!isBasic && !allowsAnyNumber) singletonViolations.push(card.name);
+      const allowsMultipleCopies = MULTI_COPY_RE.test(card.oracle_text ?? '');
+      if (!isBasic && !allowsMultipleCopies) singletonViolations.push(card.name);
     }
   }
 

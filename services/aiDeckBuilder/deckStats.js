@@ -71,7 +71,8 @@ export function computeDeckStats({ entries, commanderDoc = null, gameChangers = 
       nonLandCount += quantity;
       const cmc = card.cmc ?? 0;
       cmcSum += cmc * quantity;
-      const bucket = cmc <= 1 ? '0-1' : cmc >= 6 ? '6+' : String(Math.floor(cmc));
+      // Round so half-mana costs land in a real bucket instead of creating one.
+      const bucket = cmc <= 1 ? '0-1' : cmc >= 6 ? '6+' : String(Math.round(cmc));
       curve[bucket] += quantity;
     }
 

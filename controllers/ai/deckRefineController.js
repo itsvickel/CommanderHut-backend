@@ -50,7 +50,9 @@ async function loadSource({ generation_id, deck_id, userId }) {
     return { error: { status: 403, message: 'not your deck' } };
   }
 
-  const commanderEntry = deck.cards.find(e => e.card?.name === deck.commander);
+  // Skip entries whose card ref no longer resolves (deleted during a re-sync).
+  const entries = deck.cards.filter(e => e.card);
+  const commanderEntry = entries.find(e => e.card.name === deck.commander);
   if (!commanderEntry) {
     return { error: { status: 422, message: 'Deck has no resolvable commander — cannot refine' } };
   }
@@ -58,7 +60,7 @@ async function loadSource({ generation_id, deck_id, userId }) {
   return {
     source: 'deck',
     commander: commanderEntry.card,
-    deckCards: deck.cards.map(e => ({ card: e.card, quantity: e.quantity, role: '' })),
+    deckCards: entries.map(e => ({ card: e.card, quantity: e.quantity, role: '' })),
     power_bracket: deck.ai_metadata?.power_bracket ?? 2,
     budget_usd: deck.ai_metadata?.budget_usd ?? null,
     strategy: deck.ai_metadata?.prompt ?? '',
@@ -66,10 +68,61 @@ async function loadSource({ generation_id, deck_id, userId }) {
   };
 }
 
+/**
+ * Applies the diff staged by the last refine. Separate from `refine` so the
+ * user's accept/discard decision — not the AI call — is what changes the deck.
+ * No LLM involved, so no rate limit or quota.
+ */
+export async function acceptRefinement(req, res) {
+  const { generation_id } = req.body ?? {};
+  if (!generation_id) return res.status(400).json({ error: 'generation_id required' });
+
+  const preview = await getPreview(generation_id);
+  if (!preview) return res.status(410).json({ error: 'generation expired, regenerate' });
+  if (preview.user_id !== String(req.user.id)) {
+    return res.status(403).json({ error: 'not your generation' });
+  }
+  if (!preview.pending_diff) {
+    return res.status(409).json({ error: 'no pending changes to apply' });
+  }
+
+  const { adds, cuts } = preview.pending_diff;
+  const cutIds = new Set(cuts.map(c => String(c._id)));
+  const kept = preview.cards.filter(e => !cutIds.has(String(e.card._id)));
+  const added = adds.map(a => ({
+    card: {
+      _id: a._id,
+      name: a.name,
+      type_line: a.type_line,
+      oracle_text: a.oracle_text ?? null,
+      cmc: a.cmc ?? null,
+      mana_cost: a.mana_cost ?? null,
+      color_identity: a.color_identity ?? [],
+      image_uris: a.image_uris,
+      prices: a.prices,
+    },
+    quantity: 1,
+    role: a.role,
+  }));
+
+  const updated = { ...preview, cards: [...kept, ...added] };
+  delete updated.pending_diff;
+  await setPreview(generation_id, updated);
+
+  return res.status(200).json({
+    generation_id,
+    applied: { adds: adds.length, cuts: cuts.length },
+    deck_size: updated.cards.reduce((s, e) => s + e.quantity, 0) + 1,
+  });
+}
+
 export async function refine(req, res) {
   const body = req.body ?? {};
   const errors = validateBody(body);
-  if (errors.length) return res.status(400).json({ errors });
+  if (errors.length) {
+    await refundDailyUse(req.user.id);
+    return res.status(400).json({ errors });
+  }
 
   const loaded = await loadSource({
     generation_id: body.generation_id,
@@ -103,18 +156,15 @@ export async function refine(req, res) {
 
     await recordTokenUsage(req.user.id, diff.usage);
 
-    // Apply the diff to the cached preview so a later save persists the
-    // refined list. Saved decks are only changed once the user accepts.
-    let generation_id = body.generation_id ?? null;
+    // Stage the diff on the preview without changing its card list — the deck
+    // only changes when the user accepts (POST /ai/deck/refine/accept). A new
+    // refine replaces any previously staged diff.
+    const generation_id = body.generation_id ?? null;
     if (loaded.source === 'preview') {
-      const cutIds = new Set(diff.cuts.map(c => String(c._id)));
-      const kept = loaded.preview.cards.filter(e => !cutIds.has(String(e.card._id)));
-      const added = diff.adds.map(a => ({
-        card: { _id: a._id, name: a.name, image_uris: a.image_uris, prices: a.prices, type_line: a.type_line },
-        quantity: 1,
-        role: a.role,
-      }));
-      await setPreview(generation_id, { ...loaded.preview, cards: [...kept, ...added] });
+      await setPreview(generation_id, {
+        ...loaded.preview,
+        pending_diff: { adds: diff.adds, cuts: diff.cuts },
+      });
     }
 
     if (!isClientGone()) {

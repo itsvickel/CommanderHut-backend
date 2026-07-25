@@ -58,6 +58,7 @@ async function loadSource({ generation_id, deck_id, userId }) {
 export async function analyze(req, res) {
   const { generation_id, deck_id } = req.body ?? {};
   if (!generation_id && !deck_id) {
+    await refundDailyUse(req.user.id);
     return res.status(400).json({ error: 'generation_id or deck_id required' });
   }
 

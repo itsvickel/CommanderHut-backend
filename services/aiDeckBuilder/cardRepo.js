@@ -5,7 +5,8 @@ const LAND_TYPE_RE = /\bLand\b/;
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-const BASIC_LAND_TYPE_RE = /Basic\s+Land/;
+// Matches "Basic Land — Forest" and "Basic Snow Land — Forest".
+const BASIC_LAND_TYPE_RE = /Basic(\s+\w+)*\s+Land/;
 
 function commanderLegal() {
   return { 'legalities.commander': 'legal' };
@@ -75,19 +76,17 @@ export const cardRepo = {
 
   /**
    * Non-land candidates for the grounded synergy pick, most-played first
-   * (EDHREC rank ascending). Unranked cards are excluded — the deterministic
-   * fill covers them if the pool runs thin.
+   * (EDHREC rank ascending), topped up with unranked cards so the pool is
+   * never empty on a card database that predates the edhrec_rank sync.
    */
   async findSynergyCandidates({ colorIdentity, excludeIds = [], maxPrice, limit = 300 }) {
-    return Card.find({
+    return rankedFind({
       ...commanderLegal(),
       ...identityFilter(colorIdentity),
-      ...notInExcluded(excludeIds),
       ...priceUnder(maxPrice),
       type_line: { $not: LAND_TYPE_RE },
       layout: { $nin: ['token', 'double_faced_token'] },
-      edhrec_rank: { $ne: null },
-    }).sort({ edhrec_rank: 1 }).limit(limit).lean();
+    }, excludeIds, limit);
   },
 
   async findBasicLandByColor(colorLetter) {

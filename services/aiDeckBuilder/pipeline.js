@@ -142,6 +142,8 @@ export async function generateDeck({
     const err = new Error('Budget too low for even commander + signatures');
     err.code = 'BUDGET_TOO_LOW';
     err.suggested_min_budget_usd = Math.ceil(commanderPrice + sigPrice + 30);
+    // The LLM calls already happened — let the caller record what they cost.
+    err.usage = { ...usage };
     throw err;
   }
 

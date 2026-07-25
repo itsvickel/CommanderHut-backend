@@ -22,6 +22,28 @@ describe('validateCommanderDeck', () => {
     expect(out.singletonViolations).toEqual(['Lightning Bolt']);
   });
 
+  it('allows multiple copies of snow basics', () => {
+    const out = validateCommanderDeck({
+      entries: [{
+        card: doc('Snow-Covered Forest', { type_line: 'Basic Snow Land — Forest' }),
+        quantity: 30,
+      }],
+    });
+    expect(out.valid).toBe(true);
+  });
+
+  it('allows bounded multi-copy cards like Seven Dwarves', () => {
+    const out = validateCommanderDeck({
+      entries: [{
+        card: doc('Seven Dwarves', {
+          oracle_text: 'A deck can have up to seven cards named Seven Dwarves.',
+        }),
+        quantity: 7,
+      }],
+    });
+    expect(out.valid).toBe(true);
+  });
+
   it('allows any-number cards like Relentless Rats', () => {
     const out = validateCommanderDeck({
       entries: [{

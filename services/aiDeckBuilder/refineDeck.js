@@ -116,6 +116,12 @@ export async function refineDeck({
       image_uris: card.image_uris,
       prices: card.prices,
       type_line: card.type_line,
+      // Carried so a later analyze/refine of the same deck sees real values
+      // for these cards instead of treating them as 0-cost blanks.
+      oracle_text: card.oracle_text ?? null,
+      cmc: card.cmc ?? null,
+      mana_cost: card.mana_cost ?? null,
+      color_identity: card.color_identity ?? card.colors ?? [],
     });
     if (adds.length >= MAX_CHANGES) break;
   }

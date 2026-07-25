@@ -20,7 +20,11 @@ function validateGenerateBody(body) {
 
 export async function generate(req, res) {
   const { errors, bracket } = validateGenerateBody(req.body ?? {});
-  if (errors.length) return res.status(400).json({ errors });
+  if (errors.length) {
+    // dailyCap already charged this request; a malformed body costs nothing.
+    await refundDailyUse(req.user.id);
+    return res.status(400).json({ errors });
+  }
 
   const { emit, isClientGone, end } = openSseStream(req, res);
 
@@ -40,7 +44,13 @@ export async function generate(req, res) {
       end();
     }
   } catch (err) {
-    await refundDailyUse(req.user.id);
+    // BUDGET_TOO_LOW is raised after the LLM work is already paid for, so it
+    // keeps its quota charge; other failures are refunded.
+    if (err.code === 'BUDGET_TOO_LOW') {
+      await recordTokenUsage(req.user.id, err.usage);
+    } else {
+      await refundDailyUse(req.user.id);
+    }
     if (isClientGone()) return;
 
     if (err.code === 'COMMANDER_UNRESOLVED') {
@@ -85,10 +95,15 @@ export async function save(req, res) {
         usage: preview.usage ?? null,
         generated_at: preview.generated_at,
       },
-      cards: preview.cards.map(e => ({
-        card: e.card._id,
-        quantity: e.quantity,
-      })),
+      // The commander is stored as a card entry too, so the saved deck is a
+      // complete 100 and refine/analyze can resolve it from the list.
+      cards: [
+        { card: preview.commander._id, quantity: 1 },
+        ...preview.cards.map(e => ({
+          card: e.card._id,
+          quantity: e.quantity,
+        })),
+      ],
     });
 
     await deletePreview(generation_id);

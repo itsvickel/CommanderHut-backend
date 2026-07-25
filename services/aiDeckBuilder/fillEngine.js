@@ -5,6 +5,8 @@ import { countColorPips, computeLandTarget, splitBasics } from './manaBase.js';
 
 const ROLE_QUOTAS = { ramp: 10, draw: 10, removal: 10 };
 const TOTAL_NON_COMMANDER_SLOTS = 99;
+// Lands are reserved before spells so a large signature list can't crowd them out.
+const MIN_LANDS = 34;
 const BASIC_LAND_RE = /Basic\s+Land/;
 const LAND_RE = /\bLand\b/;
 // The deck-wide Game Changer allowance is reserved for the LLM's signature
@@ -22,8 +24,12 @@ export async function fillEngine({
   const picked = new Map(); // key: _id -> { card, quantity, role }
   const budget = { remaining: budgetRemaining };
 
+  const cardCount = () => [...picked.values()].reduce((s, p) => s + p.quantity, 0);
+
   const add = (c, role) => {
     if (picked.has(c._id.toString())) return false;
+    // Never exceed the 99 non-commander slots, however many signatures arrived.
+    if (cardCount() >= TOTAL_NON_COMMANDER_SLOTS) return false;
     picked.set(c._id.toString(), { card: c, quantity: 1, role });
     budget.remaining -= priceOf(c);
     return true;
@@ -36,10 +42,16 @@ export async function fillEngine({
 
   const excludeIds = () => [...picked.keys()];
 
-  // 2. Role quotas — pools are quality-ordered, then re-ranked by theme synergy
+  // 2. Role quotas — pools are quality-ordered, then re-ranked by theme synergy.
+  // Capped so lands always have room, however many signatures arrived.
+  const nonLandCount = () => [...picked.values()].filter(p => !isLand(p.card)).length;
+
   for (const [role, quota] of Object.entries(ROLE_QUOTAS)) {
     const already = [...picked.values()].filter(p => p.role === role).length;
-    const need = Math.max(0, quota - already);
+    const need = Math.min(
+      Math.max(0, quota - already),
+      Math.max(0, TOTAL_NON_COMMANDER_SLOTS - MIN_LANDS - nonLandCount())
+    );
     if (need === 0) continue;
 
     const pool = await cardRepo.findByRole({
@@ -63,8 +75,11 @@ export async function fillEngine({
   const corePicks = [...picked.values()].filter(p => !isLand(p.card)).map(p => p.card);
   const landTarget = computeLandTarget(corePicks);
 
-  // Non-basic lands up to ~half the land target
-  const nonBasicTarget = Math.floor(landTarget / 2);
+  // Non-basic lands up to ~half the land target, leaving room for basics
+  const nonBasicTarget = Math.min(
+    Math.floor(landTarget / 2),
+    Math.max(0, TOTAL_NON_COMMANDER_SLOTS - cardCount())
+  );
   const nbPool = await cardRepo.findNonBasicLands({
     colorIdentity, excludeIds: excludeIds(),
     maxPrice: Math.max(budget.remaining, 0),
@@ -77,10 +92,12 @@ export async function fillEngine({
     if (add(l, 'land')) nbAdded++;
   }
 
-  // 4. Synergy fill (remaining non-land slots before lands)
-  const currentLands = [...picked.values()].filter(p => isLand(p.card)).length;
-  const landSlotsLeft = landTarget - currentLands;
-  const nonLandSlotsLeft = TOTAL_NON_COMMANDER_SLOTS - picked.size - landSlotsLeft;
+  // 4. Synergy fill (remaining non-land slots, keeping the land count intact)
+  const currentLands = [...picked.values()].reduce(
+    (s, p) => s + (isLand(p.card) ? p.quantity : 0), 0
+  );
+  const landSlotsLeft = Math.max(0, landTarget - currentLands);
+  const nonLandSlotsLeft = TOTAL_NON_COMMANDER_SLOTS - cardCount() - landSlotsLeft;
   if (nonLandSlotsLeft > 0) {
     const pool = await cardRepo.findByRole({
       role: 'synergy', colorIdentity, excludeIds: excludeIds(),
@@ -100,13 +117,22 @@ export async function fillEngine({
     }
   }
 
-  // 5. Basic-land fill to reach 99, split by the deck's colored pip counts
-  const slotsLeft = TOTAL_NON_COMMANDER_SLOTS - [...picked.values()].reduce((s, p) => s + p.quantity, 0);
+  // 5. Basic-land fill to reach 99, split by the deck's colored pip counts.
+  // Adds to any existing entry rather than replacing it, so a basic land that
+  // arrived as a signature card isn't silently dropped.
+  const addBasics = (land, qty) => {
+    const key = land._id.toString();
+    const existing = picked.get(key);
+    if (existing) existing.quantity += qty;
+    else picked.set(key, { card: land, quantity: qty, role: 'land' });
+  };
+
+  const slotsLeft = TOTAL_NON_COMMANDER_SLOTS - cardCount();
   if (slotsLeft > 0) {
     if (colorIdentity.length === 0) {
       const wastes = await cardRepo.findWastes();
       if (!wastes) throw new Error('no basic lands available for color identity');
-      picked.set(wastes._id.toString(), { card: wastes, quantity: slotsLeft, role: 'land' });
+      addBasics(wastes, slotsLeft);
     } else {
       const pips = countColorPips([
         commander,
@@ -126,9 +152,7 @@ export async function fillEngine({
       if (!entries.length) throw new Error('no basic lands available for color identity');
       entries[0].qty += unplaced; // reallocate colors whose basic is missing
 
-      for (const { land, qty } of entries) {
-        picked.set(land._id.toString(), { card: land, quantity: qty, role: 'land' });
-      }
+      for (const { land, qty } of entries) addBasics(land, qty);
     }
   }
 

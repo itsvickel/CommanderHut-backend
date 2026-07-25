@@ -48,6 +48,14 @@ describe('computeDeckStats', () => {
     expect(stats.curve['6+']).toBe(1);
   });
 
+  it('buckets fractional mana values without producing NaN', () => {
+    const stats = computeDeckStats({
+      entries: [{ card: card('Half Drop', { cmc: 1.5 }), quantity: 1 }],
+    });
+    expect(Object.values(stats.curve).every(v => Number.isFinite(v))).toBe(true);
+    expect(stats.curve['2']).toBe(1);
+  });
+
   it('counts roles from oracle text', () => {
     const stats = computeDeckStats({
       entries: [
