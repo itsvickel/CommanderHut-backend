@@ -1,7 +1,4 @@
 import crypto from 'crypto';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import path from 'path';
 
 import { callLLM } from './llmClient.js';
 import { parseLlmResponse } from './parseResponse.js';
@@ -13,16 +10,15 @@ import { groundedSynergyPick } from './groundedPick.js';
 import { fillEngine } from './fillEngine.js';
 import { cardRepo as defaultRepo } from './cardRepo.js';
 import { createPreviewCache } from './previewCache.js';
+import { loadGameChangers } from './gameChangerList.js';
 import * as defaultScryfall from '../scryfallService.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const gameChangers = JSON.parse(
-  readFileSync(path.join(__dirname, '../../data/gameChangers.json'), 'utf-8')
-).cards;
+const gameChangers = loadGameChangers();
 
 const previewCache = createPreviewCache({ capacity: 500, ttlMs: 60 * 60 * 1000 });
 
 export function getPreview(id) { return previewCache.get(id); }
+export function setPreview(id, value) { previewCache.set(id, value); }
 export function deletePreview(id) { previewCache.delete(id); }
 
 function noop() {}
@@ -189,6 +185,7 @@ export async function generateDeck({
     commander,
     cards: filled,
     strategy: parsed.strategy,
+    themes: parsed.themes,
     prompt,
     power_bracket,
     budget_usd,

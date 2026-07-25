@@ -1,6 +1,7 @@
 import Deck from '../../models/Deck.js';
 import { generateDeck, getPreview, deletePreview } from '../../services/aiDeckBuilder/pipeline.js';
 import { refundDailyUse, recordTokenUsage } from '../../middleware/dailyCap.js';
+import { openSseStream } from '../../utils/sse.js';
 
 function validateGenerateBody(body) {
   const errors = [];
@@ -21,18 +22,7 @@ export async function generate(req, res) {
   const { errors, bracket } = validateGenerateBody(req.body ?? {});
   if (errors.length) return res.status(400).json({ errors });
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  const emit = (event, data) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  };
-
-  let clientGone = false;
-  req.on('close', () => { clientGone = true; });
+  const { emit, isClientGone, end } = openSseStream(req, res);
 
   try {
     const result = await generateDeck({
@@ -45,13 +35,13 @@ export async function generate(req, res) {
 
     await recordTokenUsage(req.user.id, result.usage);
 
-    if (!clientGone) {
+    if (!isClientGone()) {
       emit('result', result);
-      res.end();
+      end();
     }
   } catch (err) {
     await refundDailyUse(req.user.id);
-    if (clientGone) return;
+    if (isClientGone()) return;
 
     if (err.code === 'COMMANDER_UNRESOLVED') {
       emit('error', { stage: 'validating_commander', message: err.message });
@@ -61,7 +51,7 @@ export async function generate(req, res) {
       console.error('deck generate failed:', err);
       emit('error', { stage: 'generating', message: 'AI provider error — please try again' });
     }
-    res.end();
+    end();
   }
 }
 
