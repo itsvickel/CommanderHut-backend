@@ -129,6 +129,78 @@ describe('fillEngine', () => {
     expect(out.find(e => e.card.name === 'Wastes')).toBeTruthy();
   });
 
+  it('never exceeds 99 slots when the LLM returns a huge signature list', async () => {
+    const repo = makeRepo({
+      rampPool: Array.from({ length: 15 }, (_, i) => card(`Ramp ${i}`)),
+      drawPool: Array.from({ length: 15 }, (_, i) => card(`Draw ${i}`)),
+      removalPool: Array.from({ length: 15 }, (_, i) => card(`Removal ${i}`)),
+      nonBasicPool: Array.from({ length: 20 }, (_, i) => card(`NbLand ${i}`, { type_line: 'Land' })),
+      basics: { R: basic('Mountain') },
+    });
+
+    const out = await fillEngine({
+      commander: { _id: 'CMD', name: 'Krenko', colors: ['R'] },
+      signatures: Array.from({ length: 60 }, (_, i) => ({ ...card(`Sig ${i}`), role: 'synergy' })),
+      colorIdentity: ['R'],
+      bracket: 3,
+      budgetRemaining: 5000,
+      cardRepo: repo,
+      gameChangers: [],
+      strategy: '',
+    });
+
+    expect(out.reduce((s, e) => s + e.quantity, 0)).toBe(99);
+  });
+
+  it('still runs lands when the signature list is oversized', async () => {
+    const repo = makeRepo({
+      rampPool: Array.from({ length: 15 }, (_, i) => card(`Ramp ${i}`)),
+      nonBasicPool: Array.from({ length: 20 }, (_, i) => card(`NbLand ${i}`, { type_line: 'Land' })),
+      basics: { R: basic('Mountain') },
+    });
+
+    const out = await fillEngine({
+      commander: { _id: 'CMD', name: 'Krenko', colors: ['R'] },
+      signatures: Array.from({ length: 60 }, (_, i) => ({ ...card(`Sig ${i}`), role: 'synergy' })),
+      colorIdentity: ['R'],
+      bracket: 3,
+      budgetRemaining: 5000,
+      cardRepo: repo,
+      gameChangers: [],
+      strategy: '',
+    });
+
+    const lands = out.filter(e => /Land/.test(e.card.type_line)).reduce((s, e) => s + e.quantity, 0);
+    expect(lands).toBeGreaterThan(0);
+    expect(out.reduce((s, e) => s + e.quantity, 0)).toBe(99);
+  });
+
+  it('reaches 99 when a basic land is already among the signatures', async () => {
+    const repo = makeRepo({
+      rampPool: Array.from({ length: 15 }, (_, i) => card(`Ramp ${i}`)),
+      drawPool: Array.from({ length: 15 }, (_, i) => card(`Draw ${i}`)),
+      removalPool: Array.from({ length: 15 }, (_, i) => card(`Removal ${i}`)),
+      nonBasicPool: [],
+      basics: { R: basic('Mountain') },
+    });
+
+    const out = await fillEngine({
+      commander: { _id: 'CMD', name: 'Krenko', colors: ['R'] },
+      // the LLM named a basic land as a signature card
+      signatures: [{ ...basic('Mountain'), role: 'land' }],
+      colorIdentity: ['R'],
+      bracket: 3,
+      budgetRemaining: 500,
+      cardRepo: repo,
+      gameChangers: [],
+      strategy: '',
+    });
+
+    expect(out.reduce((s, e) => s + e.quantity, 0)).toBe(99);
+    // the duplicate collapses into one entry with a combined quantity
+    expect(out.filter(e => e.card.name === 'Mountain')).toHaveLength(1);
+  });
+
   it('counts signature cards toward role quotas', async () => {
     const repo = makeRepo({
       rampPool: Array.from({ length: 15 }, (_, i) => card(`Ramp ${i}`)),

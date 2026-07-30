@@ -2,16 +2,22 @@ import express from 'express';
 import { generateDeckDeepSeek } from '../controllers/ai/deepseekAIController.js';
 import { generateDeckGemini } from '../controllers/ai/geminiAIController.js';
 import { generate, save } from '../controllers/ai/deckBuilderController.js';
+import { refine, acceptRefinement } from '../controllers/ai/deckRefineController.js';
+import { analyze } from '../controllers/ai/deckAnalyzeController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { dailyCap } from '../middleware/dailyCap.js';
+import { aiLimiter } from '../middleware/rateLimiters.js';
 
 const router = express.Router();
 
-router.post('/deepseek', authMiddleware, dailyCap, generateDeckDeepSeek);
-router.post('/gemini', authMiddleware, dailyCap, generateDeckGemini);
+router.post('/deepseek', aiLimiter, authMiddleware, dailyCap, generateDeckDeepSeek);
+router.post('/gemini', aiLimiter, authMiddleware, dailyCap, generateDeckGemini);
 
-router.post('/ai/deck/generate', authMiddleware, dailyCap, generate);
-router.post('/ai/generate', authMiddleware, dailyCap, generate);
+router.post('/ai/deck/generate', aiLimiter, authMiddleware, dailyCap, generate);
+router.post('/ai/generate', aiLimiter, authMiddleware, dailyCap, generate);
+router.post('/ai/deck/refine', aiLimiter, authMiddleware, dailyCap, refine);
+router.post('/ai/deck/refine/accept', authMiddleware, acceptRefinement);
+router.post('/ai/deck/analyze', aiLimiter, authMiddleware, dailyCap, analyze);
 router.post('/ai/deck/save', authMiddleware, save);
 router.post('/ai/save', authMiddleware, save);
 

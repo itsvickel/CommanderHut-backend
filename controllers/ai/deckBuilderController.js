@@ -1,5 +1,7 @@
 import Deck from '../../models/Deck.js';
 import { generateDeck, getPreview, deletePreview } from '../../services/aiDeckBuilder/pipeline.js';
+import { refundDailyUse, recordTokenUsage } from '../../middleware/dailyCap.js';
+import { openSseStream } from '../../utils/sse.js';
 
 function validateGenerateBody(body) {
   const errors = [];
@@ -18,28 +20,48 @@ function validateGenerateBody(body) {
 
 export async function generate(req, res) {
   const { errors, bracket } = validateGenerateBody(req.body ?? {});
-  if (errors.length) return res.status(400).json({ errors });
+  if (errors.length) {
+    // dailyCap already charged this request; a malformed body costs nothing.
+    await refundDailyUse(req.user.id);
+    return res.status(400).json({ errors });
+  }
+
+  const { emit, isClientGone, end } = openSseStream(req, res);
 
   try {
-    const preview = await generateDeck({
+    const result = await generateDeck({
       userId: req.user.id,
       prompt: req.body.prompt.trim(),
       budget_usd: req.body.budget_usd ?? null,
       power_bracket: bracket,
+      emit,
     });
-    return res.json(preview);
+
+    await recordTokenUsage(req.user.id, result.usage);
+
+    if (!isClientGone()) {
+      emit('result', result);
+      end();
+    }
   } catch (err) {
-    if (err.code === 'COMMANDER_UNRESOLVED') {
-      return res.status(422).json({ error: err.message });
-    }
+    // BUDGET_TOO_LOW is raised after the LLM work is already paid for, so it
+    // keeps its quota charge; other failures are refunded.
     if (err.code === 'BUDGET_TOO_LOW') {
-      return res.status(422).json({
-        error: err.message,
-        suggested_min_budget_usd: err.suggested_min_budget_usd,
-      });
+      await recordTokenUsage(req.user.id, err.usage);
+    } else {
+      await refundDailyUse(req.user.id);
     }
-    console.error('deck generate failed:', err);
-    return res.status(502).json({ error: 'AI provider error' });
+    if (isClientGone()) return;
+
+    if (err.code === 'COMMANDER_UNRESOLVED') {
+      emit('error', { stage: 'validating_commander', message: err.message });
+    } else if (err.code === 'BUDGET_TOO_LOW') {
+      emit('error', { stage: 'filling', message: err.message, suggested_min_budget_usd: err.suggested_min_budget_usd });
+    } else {
+      console.error('deck generate failed:', err);
+      emit('error', { stage: 'generating', message: 'AI provider error — please try again' });
+    }
+    end();
   }
 }
 
@@ -49,7 +71,7 @@ export async function save(req, res) {
     return res.status(400).json({ error: 'generation_id and deck_name required' });
   }
 
-  const preview = getPreview(generation_id);
+  const preview = await getPreview(generation_id);
   if (!preview) return res.status(410).json({ error: 'generation expired, regenerate' });
   if (preview.user_id !== String(req.user.id)) {
     return res.status(403).json({ error: 'not your generation' });
@@ -70,15 +92,21 @@ export async function save(req, res) {
         power_bracket: preview.power_bracket,
         budget_usd: preview.budget_usd,
         model: preview.model,
+        usage: preview.usage ?? null,
         generated_at: preview.generated_at,
       },
-      cards: preview.cards.map(e => ({
-        card: e.card._id,
-        quantity: e.quantity,
-      })),
+      // The commander is stored as a card entry too, so the saved deck is a
+      // complete 100 and refine/analyze can resolve it from the list.
+      cards: [
+        { card: preview.commander._id, quantity: 1 },
+        ...preview.cards.map(e => ({
+          card: e.card._id,
+          quantity: e.quantity,
+        })),
+      ],
     });
 
-    deletePreview(generation_id);
+    await deletePreview(generation_id);
     return res.status(201).json({ deck });
   } catch (err) {
     console.error('deck save failed:', err);

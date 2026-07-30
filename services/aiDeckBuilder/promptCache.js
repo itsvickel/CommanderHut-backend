@@ -1,16 +1,6 @@
 import MasterPrompt from '../../models/MasterPrompt.js';
-
-export const OUTPUT_FORMAT = [
-  'Output ONLY valid JSON — no markdown, no bold (**), no explanation, no code fences.',
-  'Required JSON keys:',
-  '  commander: string (exact real Magic: The Gathering card name)',
-  '  color_identity: array of letters from W U B R G only',
-  '  strategy: string, max 400 chars',
-  '  signature_cards: array of objects, each with:',
-  '    name: string (exact real Magic: The Gathering card name)',
-  '    role: one of win_con | ramp | draw | removal | interaction | synergy | utility',
-  'Do not invent card names.',
-].join('\n');
+import { OUTPUT_FORMAT_V2 as OUTPUT_FORMAT } from './deckSchema.js';
+export { OUTPUT_FORMAT };
 
 const DEFAULTS = {
   role_description:
@@ -22,9 +12,9 @@ const DEFAULTS = {
 };
 
 const BRACKET_NOTES = {
-  1: 'Ultra-casual: no Game Changers, no fast mana, no tutors.',
-  2: 'Precon-level core: limited tutors, no Game Changers.',
-  3: 'Upgraded precons: no Game Changers; avoid mass land destruction.',
+  1: 'Exhibition/ultra-casual: no Game Changers, no mass land denial, no extra-turn cards, no fast mana, few tutors.',
+  2: 'Core/precon-level: no Game Changers, no mass land denial, no extra-turn cards, limited tutors.',
+  3: 'Upgraded: up to THREE Game Changers allowed; no mass land denial; extra turns only in moderation.',
   4: 'Optimized, non-cEDH. All Game Changers allowed.',
   5: 'Competitive EDH. Anything format-legal.',
 };

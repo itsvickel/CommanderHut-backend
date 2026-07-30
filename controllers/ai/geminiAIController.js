@@ -11,25 +11,23 @@ const ai = new GoogleGenAI({
  * @returns {string} AI-generated MTG response.
  */
 export async function generateDeckGemini(req, res) {
-  const prompt = req.body.prompt;
-  console.log(prompt);
+  const prompt = req.body?.prompt;
   if (!prompt || typeof prompt !== "string") {
-    throw new Error("Prompt must be a non-empty string");
+    return res.status(400).json({ error: "Prompt must be a non-empty string" });
   }
 
   const systemPrompt = `
-    You are a helpful Magic: The Gathering assistant AI. 
-    Your responses should be relevant to cards, deck building, strategy, formats (like Commander/EDH), rules, or lore. 
+    You are a helpful Magic: The Gathering assistant AI.
+    Your responses should be relevant to cards, deck building, strategy, formats (like Commander/EDH), rules, or lore.
+    Refuse requests unrelated to Magic: The Gathering.
     Be clear, concise, and always reference MTG knowledge.
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: [
-        // { role: "user", parts: [{ text: systemPrompt }] },
-        { role: "user", parts: [{ text: prompt }] },
-      ],
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { systemInstruction: systemPrompt },
     });
 
     const resultText = response.text?.trim();
@@ -37,10 +35,9 @@ export async function generateDeckGemini(req, res) {
     if (!resultText) {
       throw new Error("Empty response from Gemini");
     }
-    console.log(resultText);
     return res.json({ result: resultText });
   } catch (err) {
     console.error("Gemini MTG AI error:", err);
-    return "Sorry, I couldn't generate a response at the moment.";
+    return res.status(502).json({ error: "AI provider error — please try again" });
   }
 }

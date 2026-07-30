@@ -5,14 +5,21 @@ const LAND_TYPE_RE = /\bLand\b/;
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-const BASIC_LAND_TYPE_RE = /Basic\s+Land/;
+// Matches "Basic Land — Forest" and "Basic Snow Land — Forest".
+const BASIC_LAND_TYPE_RE = /Basic(\s+\w+)*\s+Land/;
 
 function commanderLegal() {
   return { 'legalities.commander': 'legal' };
 }
 
 function identityFilter(identity) {
-  return { colors: { $not: { $elemMatch: { $nin: identity } } } };
+  // Enforce both fields: color_identity is the true identity (synced from
+  // Scryfall); a missing color_identity passes its $not clause, in which
+  // case the colors clause still applies as a fallback for stale docs.
+  return {
+    color_identity: { $not: { $elemMatch: { $nin: identity } } },
+    colors: { $not: { $elemMatch: { $nin: identity } } },
+  };
 }
 
 function notInExcluded(excludeIds) {
@@ -46,27 +53,40 @@ export const cardRepo = {
 
   async findByRole({ role, colorIdentity, excludeIds, maxPrice, limit = 50 }) {
     const roleFilter = roleQuery(role);
-    return Card.find({
+    return rankedFind({
       ...commanderLegal(),
       ...identityFilter(colorIdentity),
-      ...notInExcluded(excludeIds),
       ...priceUnder(maxPrice),
       ...roleFilter,
       type_line: { $not: LAND_TYPE_RE },
-    }).sort({ 'prices.usd': 1 }).limit(limit).lean();
+    }, excludeIds, limit);
   },
 
   async findNonBasicLands({ colorIdentity, excludeIds, maxPrice, limit = 50 }) {
-    return Card.find({
+    return rankedFind({
       ...commanderLegal(),
       ...identityFilter(colorIdentity),
-      ...notInExcluded(excludeIds),
       ...priceUnder(maxPrice),
       $and: [
         { type_line: { $regex: LAND_TYPE_RE } },
         { type_line: { $not: BASIC_LAND_TYPE_RE } },
       ],
-    }).sort({ 'prices.usd': 1 }).limit(limit).lean();
+    }, excludeIds, limit);
+  },
+
+  /**
+   * Non-land candidates for the grounded synergy pick, most-played first
+   * (EDHREC rank ascending), topped up with unranked cards so the pool is
+   * never empty on a card database that predates the edhrec_rank sync.
+   */
+  async findSynergyCandidates({ colorIdentity, excludeIds = [], maxPrice, limit = 300 }) {
+    return rankedFind({
+      ...commanderLegal(),
+      ...identityFilter(colorIdentity),
+      ...priceUnder(maxPrice),
+      type_line: { $not: LAND_TYPE_RE },
+      layout: { $nin: ['token', 'double_faced_token'] },
+    }, excludeIds, limit);
   },
 
   async findBasicLandByColor(colorLetter) {
@@ -80,6 +100,26 @@ export const cardRepo = {
     return Card.findOne({ name: 'Wastes' }).lean();
   },
 };
+
+// Most-played first (EDHREC rank), topped up with cheapest unranked cards —
+// quality-ordered pools instead of the old cheapest-first ordering.
+async function rankedFind(baseFilter, excludeIds = [], limit = 50) {
+  const ranked = await Card.find({
+    ...baseFilter,
+    ...notInExcluded(excludeIds),
+    edhrec_rank: { $ne: null },
+  }).sort({ edhrec_rank: 1 }).limit(limit).lean();
+
+  if (ranked.length >= limit) return ranked;
+
+  const rest = await Card.find({
+    ...baseFilter,
+    ...notInExcluded([...excludeIds, ...ranked.map(c => c._id)]),
+    edhrec_rank: null,
+  }).sort({ 'prices.usd': 1 }).limit(limit - ranked.length).lean();
+
+  return [...ranked, ...rest];
+}
 
 function roleQuery(role) {
   switch (role) {

@@ -49,9 +49,15 @@ export async function addUser(req, res) {
 export async function findUser(req, res) {
   try {
     const { id } = req.params;
-    const user = await User.findById(id).select('-password');
+    const user = await User.findById(id).select('username email_address');
     if (!user) return res.status(404).json({ error: 'User not found' });
-    return res.status(200).json({ user });
+
+    // Email is private — only include it when the user looks up themselves.
+    const safeUser = { id: user._id, username: user.username };
+    if (req.user?.id === String(user._id)) {
+      safeUser.email_address = user.email_address;
+    }
+    return res.status(200).json({ user: safeUser });
   } catch (error) {
     console.error('findUser error:', error);
     return res.status(500).json({ error: 'Failed to retrieve user' });

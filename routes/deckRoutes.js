@@ -11,13 +11,14 @@ import {
   getDeckLikeStatus,
 } from '../controllers/deckController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
+import optionalAuth from '../middleware/optionalAuth.js';
 
 const router = express.Router();
 
 router.post('/decks', authMiddleware, createDeckWithCards);
 router.patch('/decks/:id', authMiddleware, updateDeck);
 router.delete('/decks/:id', authMiddleware, deleteDeck);
-router.get('/decks/user/:user_id', getDecksByUser);
+router.get('/decks/user/:user_id', optionalAuth, getDecksByUser);
 router.get('/decks/:id', getDeckByID);
 router.get('/decks', getDecks);
 

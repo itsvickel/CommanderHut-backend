@@ -1,4 +1,6 @@
 import express from 'express';
+import authMiddleware from '../middleware/authMiddleware.js';
+import adminMiddleware from '../middleware/adminMiddleware.js';
 import {
   postCardsBulkByName,
   getAllCards,
@@ -22,7 +24,7 @@ router.get('/cards/set/:set', getCardsBySet);
 router.get('/cards/search', searchCards);
 router.get('/cards/:set/:collectorNumber', getCardBySetAndCollectorNumber); 
 router.get('/cards/all', getAllCards);  
-router.post('/cards', addCard);
+router.post('/cards', authMiddleware, adminMiddleware, addCard);
 router.post('/cards/bulk-lookup', postBulkLookupByName);
 
 export default router; 

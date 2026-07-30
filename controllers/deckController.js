@@ -2,6 +2,24 @@ import mongoose from 'mongoose';
 import Deck from '../models/Deck.js';
 import Card from '../models/Card.js';
 import Like from '../models/interactions/Like.js';
+import { validateCommanderDeck } from '../services/deckValidation.js';
+
+// Finds the commander's Card doc for identity checks — from the deck list
+// map when present, otherwise by name lookup. Returns null when unknown
+// (validation then skips identity checks rather than blocking the save).
+async function resolveCommanderDoc(commanderName, nameToCardMap) {
+  if (typeof commanderName !== 'string' || !commanderName.trim()) return null;
+  const wanted = commanderName.trim().toLowerCase();
+  const fromList = nameToCardMap.get(wanted);
+  if (fromList) return fromList;
+  try {
+    const escaped = commanderName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const docs = await Card.find({ name: new RegExp(`^${escaped}$`, 'i') }).lean();
+    return docs.find(d => d.name?.toLowerCase() === wanted) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export const createDeckWithCards = async (req, res) => {
   const { deck_name, format, commander, commander_image, deck_list, tags, is_public } = req.body;
@@ -33,6 +51,7 @@ export const createDeckWithCards = async (req, res) => {
 
     const notFoundNames = [];
     const validDeckList = [];
+    const resolvedEntries = [];
 
     for (const [index, { card: cardName, quantity }] of deck_list.entries()) {
       if (typeof cardName !== 'string' || typeof quantity !== 'number' || quantity < 1) {
@@ -46,6 +65,7 @@ export const createDeckWithCards = async (req, res) => {
         notFoundNames.push(cardName);
       } else {
         validDeckList.push({ card: matchedCard._id, quantity });
+        resolvedEntries.push({ card: matchedCard, quantity });
       }
     }
 
@@ -54,6 +74,19 @@ export const createDeckWithCards = async (req, res) => {
         error: 'Some cards were not found in the database.',
         notFound: notFoundNames,
       });
+    }
+
+    if (format === 'Commander') {
+      const commanderDoc = await resolveCommanderDoc(commander, nameToCardMap);
+      const check = validateCommanderDeck({ entries: resolvedEntries, commanderDoc });
+      if (!check.valid) {
+        return res.status(400).json({
+          error: 'Commander deck validation failed',
+          details: check.errors,
+          singleton: check.singletonViolations,
+          off_identity: check.identityViolations,
+        });
+      }
     }
 
     const newDeck = await Deck.create({
@@ -98,11 +131,15 @@ export const deleteDeck = async (req, res) => {
 
 export const getDecksByUser = async (req, res) => {
   const { user_id } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(user_id)) {
+  // User ids are UUID strings, not ObjectIds.
+  if (typeof user_id !== 'string' || !user_id.trim() || user_id.length > 64) {
     return res.status(400).json({ error: 'Invalid user ID' });
   }
   try {
-    const decks = await Deck.find({ owner: user_id });
+    const filter = { owner: user_id };
+    // Private decks are only visible to their owner.
+    if (req.user?.id !== user_id) filter.is_public = true;
+    const decks = await Deck.find(filter);
     res.status(200).json(decks);
   } catch (error) {
     console.error('Error fetching decks by user:', error);
@@ -161,6 +198,7 @@ export const updateDeck = async (req, res) => {
       const nameToCardMap = new Map(foundCards.map(c => [c.name.toLowerCase(), c]));
       const notFoundNames = [];
       const validDeckList = [];
+      const resolvedEntries = [];
 
       for (const [index, { card: cardName, quantity }] of deck_list.entries()) {
         if (typeof cardName !== 'string' || typeof quantity !== 'number' || quantity < 1) {
@@ -168,11 +206,29 @@ export const updateDeck = async (req, res) => {
         }
         const matched = nameToCardMap.get(cardName.toLowerCase());
         if (!matched) notFoundNames.push(cardName);
-        else validDeckList.push({ card: matched._id, quantity });
+        else {
+          validDeckList.push({ card: matched._id, quantity });
+          resolvedEntries.push({ card: matched, quantity });
+        }
       }
 
       if (notFoundNames.length > 0) {
         return res.status(400).json({ error: 'Some cards were not found in the database.', notFound: notFoundNames });
+      }
+
+      const effectiveFormat = format ?? deck.format;
+      if (effectiveFormat === 'Commander') {
+        const effectiveCommander = commander ?? deck.commander;
+        const commanderDoc = await resolveCommanderDoc(effectiveCommander, nameToCardMap);
+        const check = validateCommanderDeck({ entries: resolvedEntries, commanderDoc });
+        if (!check.valid) {
+          return res.status(400).json({
+            error: 'Commander deck validation failed',
+            details: check.errors,
+            singleton: check.singletonViolations,
+            off_identity: check.identityViolations,
+          });
+        }
       }
 
       updates.cards = validDeckList;
